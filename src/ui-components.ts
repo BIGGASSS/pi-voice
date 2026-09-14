@@ -131,7 +131,7 @@ export class DownloadPanel {
     const privacy = this.theme.fg("dim", "Models run locally — audio never leaves this machine.");
     const hint = keyHint("tui.select.cancel", "stop (keeps progress)");
     const activity = this.spinner.render(width);
-    const lines = ["", ...text(title), ...activity, ...text(progress), ...text(stats), ...text(privacy), "", ...text(hint)];
+    const lines = ["", ...text(title), ...activity, "", ...text(progress), "", ...text(stats), ...text(privacy), "", ...text(hint)];
     if (lines.length <= maxRows) return lines;
     // Small terminals keep the current operation and cancel key visible.
     const compact = [title, activity[1]?.trim() ?? this.state.message, progress, stats, privacy]

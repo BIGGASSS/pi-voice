@@ -72,8 +72,12 @@ test("Enter starts a download and Escape cancels it without closing the picker",
 
   h.picker.handleInput(ENTER);
   h.progress(1_260_000_000, 3_000_000_000);
-  assert.match(rendered(h.picker), /Downloading/);
-  assert.match(rendered(h.picker), /42%/);
+  const downloadLines = rendered(h.picker).split("\n");
+  assert.ok(downloadLines.some((line) => line.includes("Downloading")));
+  const progressLine = downloadLines.findIndex((line) => line.includes("42%"));
+  assert.ok(progressLine > 0);
+  assert.equal(downloadLines[progressLine - 1]!.trim(), "");
+  assert.equal(downloadLines[progressLine + 1]!.trim(), "");
 
   h.picker.handleInput(ESC);
   assert.equal(h.signal().aborted, true);
