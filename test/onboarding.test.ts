@@ -7,7 +7,7 @@ import { initTheme, type ExtensionContext } from "@earendil-works/pi-coding-agen
 import type { Component } from "@earendil-works/pi-tui";
 import { Deferred } from "../src/deferred.js";
 import { CatalogModelPicker, LanguagePicker } from "../src/model-picker.js";
-import { changeOnboardingModel, runOnboarding } from "../src/onboarding.js";
+import { changeOnboardingModel, runModelSelection, runOnboarding } from "../src/onboarding.js";
 import { RecommendedModelPicker } from "../src/recommendation-picker.js";
 import { CATALOG_MODELS } from "../src/catalog.js";
 import { recommendModels } from "../src/recommendations.js";
@@ -125,6 +125,54 @@ for (const entry of ["recommended", "other-models", "single-pick"] as const) {
     revisit.assertFinished();
   });
 }
+
+test("a root catalog stays root when another cached model appears while it is open", async (t) => {
+  isolatedSettings(t);
+  const cache = isolatedModelCache(t);
+  const current = CATALOG_MODELS.find((model) => model.id === "parakeet-unified-en-0.6b")!;
+  const second = CATALOG_MODELS.find((model) => model.id !== current.id)!;
+  cacheCatalogModel(cache, current);
+  const script = scriptedContext([
+    (pane) => {
+      assert.ok(pane instanceof CatalogModelPicker);
+      assert.match(stripAnsi(pane.render(80).join("\n")), /escape\/ctrl\+c\s+close/i);
+      // Simulate finishing a download without closing this catalog. Routing
+      // must still reflect the cache state from when the pane opened.
+      cacheCatalogModel(cache, second);
+      pane.handleInput("\x1b");
+    },
+  ]);
+  assert.equal(await runModelSelection(script.ctx, {
+    preferredLanguages: ["en"],
+    currentModelId: current.id,
+    postActivation: "stay",
+  }), undefined);
+  script.assertFinished();
+});
+
+test("Escape from all models returns to the recommendation that opened it", async (t) => {
+  isolatedSettings(t);
+  const current = initialSettings();
+  await writeSettings(current);
+  const script = scriptedContext([
+    (pane) => {
+      assert.ok(pane instanceof RecommendedModelPicker);
+      assert.match(stripAnsi(pane.render(80).join("\n")), /Change model/);
+      pane.handleInput("o");
+    },
+    (pane) => {
+      assert.ok(pane instanceof CatalogModelPicker);
+      assert.match(stripAnsi(pane.render(80).join("\n")), /escape\/ctrl\+c\s+back/i);
+      pane.handleInput("\x1b");
+    },
+    (pane) => {
+      assert.ok(pane instanceof RecommendedModelPicker);
+      pane.handleInput("\x1b");
+    },
+  ]);
+  assert.equal(await changeOnboardingModel(script.ctx, current), undefined);
+  script.assertFinished();
+});
 
 test("cancelling the language picker returns to its model pane without applying edits", async (t) => {
   isolatedSettings(t);

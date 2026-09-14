@@ -143,7 +143,7 @@ export class TryItPane implements Component {
     ) {
       hints = keyHint("tui.select.cancel", "cancel");
     } else if (state.phase === "result") {
-      hints = `${keyHint("tui.select.confirm", "looks good")}  ${rawKeyHint(shortcut, "try again")}`;
+      hints = `${keyHint("tui.select.confirm", "looks good")}  ${keyHint("tui.select.cancel", "done")}  ${rawKeyHint(shortcut, "try again")}`;
     } else {
       hints = `${rawKeyHint(shortcut, state.phase === "error" ? "try again" : "record")}  ${keyHint("tui.select.cancel", "skip")}`;
     }

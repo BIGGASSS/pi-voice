@@ -318,11 +318,7 @@ export class YourModelsPicker extends Container implements Focusable {
     }
 
     const confirmLabel = "choose";
-    const closeLabel = this.search.getValue()
-      ? "clear search"
-      : this.selection.selectedDuringSession
-        ? "back"
-        : "close";
+    const closeLabel = this.search.getValue() ? "clear search" : "close";
     this.footer.setText(
       `${rawKeyHint("↑↓", "navigate")}  ${keyHint("tui.select.confirm", confirmLabel)}  ${keyHint("tui.select.cancel", closeLabel)}  ${rawKeyHint("?", "rating guide")}`,
     );

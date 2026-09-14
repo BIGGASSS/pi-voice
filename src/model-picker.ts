@@ -381,6 +381,8 @@ export type CatalogModelPickerOptions = {
   postActivation?: CatalogModelPostActivation;
   /** The host is reopening this picker after an activation in the same flow. */
   activatedInFlow?: boolean;
+  /** What Esc does once there is no search to clear; the host knows where it leads. */
+  cancelLabel?: string;
 };
 
 export class CatalogModelPicker extends Container implements Focusable {
@@ -395,6 +397,7 @@ export class CatalogModelPicker extends Container implements Focusable {
   private readonly footer = new Text("", TEXT_PADDING, 0);
   private readonly ratingsHelp: ModelRatingsHelp;
   private readonly selection: ModelSelectionController<CatalogModelPickerResult | undefined>;
+  private readonly cancelLabel: string;
   private readonly languageColumns: readonly string[];
   /** Benchmarks on every chosen language; absent models miss one. */
   private readonly benchmarks: ReadonlyMap<string, ModelBenchmark>;
@@ -441,6 +444,7 @@ export class CatalogModelPicker extends Container implements Focusable {
     options: CatalogModelPickerOptions = {},
   ) {
     super();
+    this.cancelLabel = options.cancelLabel ?? "close";
     this.ratingsHelp = new ModelRatingsHelp(tui, theme, keybindings, true);
     this.selection = new ModelSelectionController<CatalogModelPickerResult | undefined>((...args) => this.onActivate(...args), {
       models: CATALOG_MODELS,
@@ -737,11 +741,7 @@ export class CatalogModelPicker extends Container implements Focusable {
     const statusLegend = displayedId
       ? `${selectionMarker(this.theme, true)} ${this.theme.fg("dim", "current")}`
       : "";
-    const closeLabel = query
-      ? "clear search"
-      : this.selection.selectedDuringSession
-        ? "back"
-        : "cancel";
+    const closeLabel = query ? "clear search" : this.cancelLabel;
     // The confirm key says what it will do for the highlighted row.
     const highlighted = this.highlightedModel();
     const confirmLabel = this.rows[this.selectedIndex]?.type === "fold"
@@ -880,6 +880,8 @@ export async function chooseCatalogModel(
     postActivation?: CatalogModelPostActivation;
     /** A model was already activated earlier in this flow. */
     activatedInFlow?: boolean;
+    /** What Esc does once there is no search to clear. */
+    cancelLabel?: string;
   },
 ): Promise<CatalogModelPickerResult | undefined> {
   return ctx.ui.custom<CatalogModelPickerResult | undefined>(
@@ -895,6 +897,7 @@ export async function chooseCatalogModel(
         {
           postActivation: options.postActivation,
           activatedInFlow: options.activatedInFlow,
+          cancelLabel: options.cancelLabel,
         },
       ),
   );

@@ -37,6 +37,26 @@ test("your models opens with the current model first", (t) => {
   assert.equal(modelLines.length, 3);
 });
 
+test("your models labels Escape as close even after a selection", (t) => {
+  const cache = isolatedModelCache(t);
+  cacheModels(cache, ["parakeet-tdt-0.6b-v3", "whisper-small"]);
+  const picker = new YourModelsPicker(
+    testTui(),
+    testTheme(),
+    keybindings(),
+    ["en"],
+    "whisper-small",
+    () => undefined,
+    () => new Promise(() => undefined),
+    { activatedInFlow: true },
+  );
+  t.after(() => picker.dispose());
+
+  const body = stripAnsi(picker.render(80).join("\n"));
+  assert.match(body, /escape\/ctrl\+c\s+close/i);
+  assert.doesNotMatch(body, /escape\/ctrl\+c\s+back/i);
+});
+
 test("your models marks models that require manual language selection", (t) => {
   const cache = isolatedModelCache(t);
   cacheModels(cache, ["parakeet-tdt-0.6b-v3", "Qwen3-ASR-1.7B", "canary-1b-v2"]);

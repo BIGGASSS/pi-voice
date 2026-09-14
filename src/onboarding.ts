@@ -98,9 +98,15 @@ export async function runModelSelection(
       activatedInFlow: configured !== undefined,
       onActivate: activate,
     };
+    // Frozen at open so the footer label and the route Esc takes agree even
+    // if a download during this pane makes switching() flip.
+    const cameFromYours = page === "browse" && switching();
     const selection = page === "yours"
       ? await chooseYourModel(ctx, preferredLanguages, currentModelId, paneOptions)
-      : await chooseCatalogModel(ctx, preferredLanguages, currentModelId, paneOptions);
+      : await chooseCatalogModel(ctx, preferredLanguages, currentModelId, {
+          ...paneOptions,
+          cancelLabel: cameFromYours ? "back" : "close",
+        });
     // The picker can close while its last commit is still in flight; wait so
     // configured reflects every selection that will land on disk.
     await waitForCommits();
@@ -109,7 +115,7 @@ export async function runModelSelection(
       page = "browse";
       continue;
     }
-    if (!selection && page === "browse" && switching()) {
+    if (!selection && cameFromYours) {
       // Esc from the catalog steps back to the downloaded models.
       page = "yours";
       continue;
@@ -208,9 +214,11 @@ export async function changeOnboardingModel(
 ): Promise<TranscribeSettings | undefined> {
   let languages = [...current.preferredLanguages];
   let picks = recommendModels(CATALOG_MODELS, languages);
-  let pane: "recommended" | "browse" = hasRecommendedAlternatives(picks)
-    ? "recommended"
-    : "browse";
+  // With nothing to recommend besides the current model, the catalog is the
+  // whole flow. Otherwise the recommendation pane fronts it, and Esc from
+  // the catalog returns there rather than to Try it.
+  let recommending = hasRecommendedAlternatives(picks);
+  let pane: "recommended" | "browse" = recommending ? "recommended" : "browse";
   let chosen: TranscribeSettings | undefined;
   const activation = createSettingsActivation(
     () => ({
@@ -227,13 +235,19 @@ export async function changeOnboardingModel(
   while (true) {
     const result = pane === "recommended"
       ? await chooseRecommendedModel(ctx, languages, picks, activation.activate, {
+          title: "Change model",
           expanded: true,
         })
       : await chooseCatalogModel(ctx, languages, chosen?.model.id ?? current.model.id, {
           postActivation: "advance",
           onActivate: activation.activate,
+          cancelLabel: "back",
         });
     await activation.waitForCommits();
+    if (!result && pane === "browse" && recommending) {
+      pane = "recommended";
+      continue;
+    }
     if (!result || result.type === "complete" || result.type === "back") return chosen;
     if (result.type === "other-models") {
       pane = "browse";
@@ -250,6 +264,7 @@ export async function changeOnboardingModel(
     languages = changed.languages;
     picks = recommendModels(CATALOG_MODELS, languages);
     // Even a single pick deserves its recommendation after languages change.
+    recommending = true;
     pane = "recommended";
   }
 }
@@ -302,6 +317,7 @@ export async function runOnboarding(
       const selection = await chooseCatalogModel(ctx, languages, configured?.model.id, {
         postActivation: "advance",
         onActivate: activate,
+        cancelLabel: "back",
       });
       await waitForCommits();
       if (selection?.type === "complete" && configured) {

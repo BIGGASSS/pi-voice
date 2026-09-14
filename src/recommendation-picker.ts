@@ -42,6 +42,8 @@ export type RecommendedModelResult =
 export type RecommendedModelPickerOptions = {
   /** Start with the alternatives unfolded. */
   expanded?: boolean;
+  /** Defaults to the onboarding step heading. */
+  title?: string;
 };
 
 /** Whether the recommendation pane has a distinct, supported trade-off to show. */
@@ -72,6 +74,7 @@ export class RecommendedModelPicker extends Container implements Focusable {
   private expanded = false;
   private selectedIndex = 0;
   private readonly selection: ModelSelectionController<RecommendedModelResult | undefined>;
+  private readonly title: string;
   private downloadPanel: DownloadPanel | undefined;
   private disposed = false;
   private _focused = false;
@@ -95,6 +98,7 @@ export class RecommendedModelPicker extends Container implements Focusable {
     options: RecommendedModelPickerOptions = {},
   ) {
     super();
+    this.title = options.title ?? "Set up pi-transcribe · 2 of 3";
     this.selection = new ModelSelectionController<RecommendedModelResult | undefined>(
       (...args) => this.activate(...args),
       {
@@ -124,7 +128,7 @@ export class RecommendedModelPicker extends Container implements Focusable {
     this.addChild(panelBorder(theme));
     this.addChild(new Spacer(1));
     this.addChild(
-      new Text(theme.fg("accent", theme.bold("Set up pi-transcribe · 2 of 3")), PANEL_PADDING, 0),
+      new Text(theme.fg("accent", theme.bold(this.title)), PANEL_PADDING, 0),
     );
     this.addChild(
       new Text(
@@ -385,7 +389,7 @@ export class RecommendedModelPicker extends Container implements Focusable {
     if (lines.length <= budget) return lines;
     const line = (value: string) => truncateToWidth(` ${value}`, width);
     const text = (value: string) => new Text(value, PANEL_PADDING, 0).render(width);
-    const title = line(this.theme.fg("accent", "Set up pi-transcribe · 2 of 3"));
+    const title = line(this.theme.fg("accent", this.title));
     if (this.downloadPanel) {
       return budget === 1 ? this.downloadPanel.render(width, 1)
         : [title, ...this.downloadPanel.render(width, budget - 1)];
