@@ -45,8 +45,19 @@ test("Try It renders its configured controls", async () => {
   );
   const body = stripAnsi(pane.render(80).join("\n"));
   assert.match(body, /Try it/);
-  assert.match(body, /Ctrl\+(Option|Alt)\+Z/);
-  assert.match(body, /Ready to listen/);
+  assert.match(
+    body,
+    /Give it a try: Press Ctrl\+(Option|Alt)\+Z to start recording\. Press it again to stop\./,
+  );
+  assert.doesNotMatch(body, /Ready to listen/);
+  assert.match(body, /Your transcript will appear here\./);
+  const lines = body.split("\n");
+  const shortcutLine = lines.find((line) => line.includes("Shortcut:"));
+  const microphoneLine = lines.find((line) => line.includes("Microphone:"));
+  const modelLine = lines.find((line) => line.includes("Model:"));
+  assert.ok(shortcutLine && microphoneLine && modelLine);
+  assert.equal(shortcutLine.indexOf("Ctrl"), microphoneLine.indexOf("System default"));
+  assert.equal(shortcutLine.indexOf("Ctrl"), modelLine.indexOf("Parakeet Unified"));
   await pane.dispose();
 });
 

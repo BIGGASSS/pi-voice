@@ -100,7 +100,7 @@ export class TryItPane implements Component {
     const fg = (color: Parameters<UiTheme["fg"]>[0], text: string) => this.theme.fg(color, text);
     const text = (value: string) => new Text(value, PANEL_PADDING, 0).render(width);
     const line = (value: string) => truncateToWidth(` ${value}`, width);
-    let status: string;
+    let status = "";
     let content = "";
     let nudge = "";
     if (state.phase === "listening") {
@@ -129,7 +129,7 @@ export class TryItPane implements Component {
         content += "\nCheck System Settings → Privacy & Security → Microphone for your terminal app.";
       }
     } else {
-      status = fg("muted", "Ready to listen");
+      content = fg("dim", "Your transcript will appear here.");
     }
     this.preview.setText(content);
 
@@ -150,9 +150,10 @@ export class TryItPane implements Component {
 
     const setting = (label: string, value: string, key: string, compact: boolean) => {
       const suffix = ` (${key} to change)`;
+      const labelColumn = compact ? `${label}: ` : `${label}:`.padEnd(12);
       const body = compact
-        ? truncateToWidth(`${label}: ${value}`, Math.max(1, width - 2 - suffix.length))
-        : `${label}: ${value}`;
+        ? truncateToWidth(`${labelColumn}${value}`, Math.max(1, width - 2 - suffix.length))
+        : `${labelColumn}${value}`;
       return fg("muted", body) + fg("dim", suffix);
     };
     const header = (compact: boolean): string[] => {
@@ -168,9 +169,13 @@ export class TryItPane implements Component {
         ...render(setting("Microphone", microphoneSummary(this.settings.microphone), "m", compact)),
         ...render(setting("Model", modelName, "c", compact)),
         ...(compact ? [] : [""]),
-        ...render(compact ? `${shortcut} starts/stops recording` : `Press ${shortcut} to start recording. Press it again to stop.`),
-        ...(compact ? [] : [""]),
-        ...render(status),
+        ...render(
+          state.phase === "idle" || state.phase === "ready"
+            ? compact
+              ? `${shortcut} starts/stops recording`
+              : `Give it a try: Press ${shortcut} to start recording. Press it again to stop.`
+            : status,
+        ),
         ...(nudge ? render(nudge) : []),
       ];
     };
