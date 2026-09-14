@@ -95,6 +95,11 @@ export function padToWidth(value: string, width: number): string {
   return `${truncated}${" ".repeat(Math.max(0, width - visibleWidth(truncated)))}`;
 }
 
+/** Shared fixed-width marker: the arrow is focus, while ✓ is selected/current. */
+export function selectionMarker(theme: UiTheme, selected: boolean): string {
+  return selected ? theme.fg("accent", "✓") : " ";
+}
+
 /** Shared download presentation; the picker owns and disposes its spinner. */
 export class DownloadPanel {
   private readonly spinner: Loader;
@@ -179,9 +184,9 @@ export class SingleSelectPicker<T extends string> extends Container implements F
       searchable?: boolean;
       maximumVisible?: number;
       cancelLabel?: string;
-      /** Extra footer legend, appended after the ● current marker. */
+      /** Extra footer legend, appended after the ✓ current marker. */
       legend?: string;
-      /** Custom row body after the cursor and ● markers; handles its own active styling. */
+      /** Custom row body after the cursor and ✓ markers; handles its own active styling. */
       renderLabel?: (choice: SingleSelectChoice<T>, active: boolean, width: number) => string;
     },
     private readonly done: (value: T | undefined) => void,
@@ -258,9 +263,7 @@ export class SingleSelectPicker<T extends string> extends Container implements F
         const prefix = active ? this.theme.fg("accent", "→ ") : "  ";
         const current = this.current === undefined
           ? ""
-          : choice.value === this.current
-            ? this.theme.fg("accent", "● ")
-            : "  ";
+          : `${selectionMarker(this.theme, choice.value === this.current)} `;
         const label = this.options.renderLabel
           ? this.options.renderLabel(choice, active, this.renderWidth)
           : active
@@ -288,7 +291,7 @@ export class SingleSelectPicker<T extends string> extends Container implements F
     const legend = [
       this.current === undefined
         ? undefined
-        : `${this.theme.fg("accent", "●")} ${this.theme.fg("dim", "current")}`,
+        : `${selectionMarker(this.theme, true)} ${this.theme.fg("dim", "current")}`,
       this.options.legend,
     ]
       .filter((value): value is string => Boolean(value))

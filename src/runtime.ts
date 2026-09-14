@@ -83,6 +83,20 @@ export function createPiTranscribeRuntime(
     settingsReadWarning = undefined;
   }
 
+  function notifyReady(ctx: ExtensionContext, configured: TranscribeSettings): void {
+    const model = getCatalogModel(configured.model.id);
+    const languages = configured.preferredLanguages.map(displayLanguage).join(", ");
+    // Pi binds shortcuts at extension load. The command path reloads on its
+    // own; the shortcut path cannot, so say what it takes to use a new one.
+    const talk = configured.shortcut === registeredShortcut
+      ? `${displayShortcut(configured.shortcut)} to talk`
+      : `run /reload, then ${displayShortcut(configured.shortcut)} to talk`;
+    ctx.ui.notify(
+      `✓ pi-transcribe ready · ${talk}\n${languages} · ${model?.name ?? configured.model.id} · /transcribe for settings`,
+      "info",
+    );
+  }
+
   async function loadSettingsOnce(): Promise<void> {
     if (settingsLoaded) return;
     const { readSettings } = await import("./settings.js");
@@ -144,19 +158,7 @@ export function createPiTranscribeRuntime(
     const configured = previous
       ? await configureModel(ctx, previous)
       : await configureFirstRun(ctx);
-    if (configured) {
-      const model = getCatalogModel(configured.model.id);
-      const languages = configured.preferredLanguages.map(displayLanguage).join(", ");
-      // Pi binds shortcuts at extension load. The command path reloads on its
-      // own; the shortcut path cannot, so say what it takes to use a new one.
-      const talk = configured.shortcut === registeredShortcut
-        ? `${displayShortcut(configured.shortcut)} to talk`
-        : `run /reload, then ${displayShortcut(configured.shortcut)} to talk`;
-      ctx.ui.notify(
-        `✓ pi-transcribe ready · ${talk}\n${languages} · ${model?.name ?? configured.model.id} · /transcribe for settings`,
-        "info",
-      );
-    }
+    if (configured) notifyReady(ctx, configured);
     return { configured, completedFirstRun: previous === undefined && configured !== undefined };
   }
 
@@ -396,7 +398,9 @@ export function createPiTranscribeRuntime(
       );
       if (!configured) return;
       rememberSettings(configured);
-      ctx.ui.notify("Onboarding replay complete", "info");
+      // End on the same Ready state as first-run setup. A replay should expose
+      // the complete user flow rather than a debug-only completion message.
+      notifyReady(ctx, configured);
     });
   }
 

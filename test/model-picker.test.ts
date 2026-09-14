@@ -94,7 +94,7 @@ test("a completed download returns to the list and marks the selected model", as
 
   const body = rendered(h.picker);
   assert.match(body, /Downloaded and selected/);
-  assert.match(body, /● current/);
+  assert.match(body, /✓ current/);
 });
 
 test("advance policy completes after activation", async (t) => {
@@ -117,7 +117,9 @@ test("language picker exposes Continue as a fixed Tab action", () => {
       result = value;
     },
   );
-  assert.match(stripAnsi(picker.render(80).join("\n")), /tab\s+Continue/i);
+  const rendered = stripAnsi(picker.render(80).join("\n"));
+  assert.match(rendered, /→ ✓ English/);
+  assert.match(rendered, /tab\s+Continue/i);
   picker.handleInput("\t");
   assert.deepEqual(result, { languages: ["en"], confirmed: true });
 });
@@ -156,7 +158,7 @@ test("transcription language picker keeps auto detect and language codes", () =>
     },
   );
   const lines = picker.render(80);
-  assert.ok(lines.some((line) => line.includes("→ ● Auto detect")));
+  assert.ok(lines.some((line) => line.includes("→ ✓ Auto detect")));
   assert.ok(lines.some((line) => /English\s+en-US/.test(line)));
   assert.ok(!lines.some((line) => line.includes("★")));
   picker.handleInput(ENTER);

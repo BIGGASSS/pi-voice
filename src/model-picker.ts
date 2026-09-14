@@ -59,6 +59,7 @@ import {
   paneListWindow,
   paneRowBudget,
   selectedWindow,
+  selectionMarker,
   SingleSelectPicker,
   windowSizeForBudget,
   type SingleSelectChoice,
@@ -248,7 +249,7 @@ export class LanguagePicker extends Container implements Focusable {
         const active = index === cursorRow;
         const checked = this.selected.has(language);
         const prefix = active ? this.theme.fg("accent", "→ ") : "  ";
-        const mark = checked ? this.theme.fg("success", "[×]") : this.theme.fg("dim", "[ ]");
+        const mark = selectionMarker(this.theme, checked);
         const name = padToWidth(displayLanguage(language), LANGUAGE_NAME_WIDTH);
         this.list.addChild(
           new Text(
@@ -509,7 +510,7 @@ export class CatalogModelPicker extends Container implements Focusable {
     this.addChild(new Spacer(1));
     this.addChild(panelBorder(theme));
 
-    // The cursor starts at the top, on the best recommendation; ● marks the
+    // The cursor starts at the top, on the best recommendation; ✓ marks the
     // current model wherever it sits.
     this.refresh();
   }
@@ -734,7 +735,7 @@ export class CatalogModelPicker extends Container implements Focusable {
       ? `${this.filtered.length}/${total} matching models`
       : `${total} models`;
     const statusLegend = displayedId
-      ? `${this.theme.fg("accent", "●")} ${this.theme.fg("dim", "current")}`
+      ? `${selectionMarker(this.theme, true)} ${this.theme.fg("dim", "current")}`
       : "";
     const closeLabel = query
       ? "clear search"

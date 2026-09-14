@@ -30,12 +30,12 @@ test("single-select picker marks the saved value separately from focus", () => {
     },
   );
 
-  assert.ok(picker.render(80).some((line) => line.includes("→ ● Beta")));
+  assert.ok(picker.render(80).some((line) => line.includes("→ ✓ Beta")));
   picker.handleInput("\u001b[B");
   const moved = picker.render(80);
   assert.ok(moved.some((line) => line.includes("→   Gamma")));
-  assert.ok(moved.some((line) => line.includes("  ● Beta")));
-  assert.ok(moved.some((line) => line.includes("● current")));
+  assert.ok(moved.some((line) => line.includes("  ✓ Beta")));
+  assert.ok(moved.some((line) => line.includes("✓ current")));
   picker.handleInput("\r");
   assert.equal(selected, "gamma");
 });
@@ -56,7 +56,7 @@ test("single-select picker can act as a menu without a current marker", () => {
 
   const rendered = picker.render(80).join("\n");
   assert.match(rendered, /→ Model/);
-  assert.doesNotMatch(rendered, /●|current/);
+  assert.doesNotMatch(rendered, /✓|current/);
   picker.handleInput("\r");
   assert.equal(selected, "model");
 });
@@ -80,11 +80,11 @@ test("single-select picker clears search before going back and respects width", 
 
   picker.handleInput("b");
   assert.ok(picker.render(40).some((line) => line.includes("Beta")));
-  assert.ok(!picker.render(40).some((line) => line.includes("● Alpha")));
+  assert.ok(!picker.render(40).some((line) => line.includes("✓ Alpha")));
 
   picker.handleInput("\u001b");
   assert.equal(closes, 0);
-  assert.ok(picker.render(40).some((line) => line.includes("→ ● Alpha")));
+  assert.ok(picker.render(40).some((line) => line.includes("→ ✓ Alpha")));
 
   picker.handleInput("\u001b");
   assert.equal(closes, 1);

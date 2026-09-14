@@ -16,7 +16,7 @@ import {
   type AccuracyLetter,
   type RecommendationRole,
 } from "./recommendations.js";
-import { LIST_PADDING, padToWidth } from "./ui-components.js";
+import { LIST_PADDING, padToWidth, selectionMarker } from "./ui-components.js";
 
 type UiTheme = ExtensionContext["ui"]["theme"];
 
@@ -142,7 +142,7 @@ export function modelTableRow(
   options: { active: boolean; current: boolean; tag?: string },
 ): string {
   const prefix = options.active ? theme.fg("accent", "→ ") : "  ";
-  const current = options.current ? theme.fg("accent", "●") : " ";
+  const current = selectionMarker(theme, options.current);
   const nameText = padToWidth(model.name, layout.nameWidth);
   const name = options.active ? theme.fg("accent", nameText) : nameText;
   const size = layout.sizeWidth === undefined
