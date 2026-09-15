@@ -53,6 +53,7 @@ import {
   DownloadPanel,
   LIST_PADDING,
   MIN_VISIBLE_ROWS,
+  onboardingHeader,
   PANEL_PADDING,
   padToWidth,
   panelBorder,
@@ -139,7 +140,7 @@ export class LanguagePicker extends Container implements Focusable {
     initial: readonly string[],
     private readonly cancelLabel: string,
     private readonly done: (result: LanguageSelection | undefined) => void,
-    private readonly onboarding = false,
+    private readonly onboardingStep?: number,
   ) {
     super();
     // Benchmark filtering controls new choices, not existing preferences.
@@ -151,18 +152,17 @@ export class LanguagePicker extends Container implements Focusable {
     this.addChild(panelBorder(theme));
     this.addChild(new Spacer(1));
     this.addChild(
-      new Text(
-        theme.fg(
-          "accent",
-          theme.bold(onboarding ? "Set up pi-transcribe · 1 of 3" : "Select the languages you speak"),
-        ),
-        TEXT_PADDING,
-        0,
-      ),
+      onboardingStep
+        ? onboardingHeader(theme, "Choose your languages", onboardingStep)
+        : new Text(
+            theme.fg("accent", theme.bold("Select the languages you speak")),
+            TEXT_PADDING,
+            0,
+          ),
     );
     this.addChild(
       new Text(
-        onboarding
+        onboardingStep
           ? "Which languages will you speak to Pi in?"
           : theme.fg("muted", "Used to recommend models"),
         TEXT_PADDING,
@@ -383,6 +383,9 @@ export type CatalogModelPickerOptions = {
   activatedInFlow?: boolean;
   /** What Esc does once there is no search to clear; the host knows where it leads. */
   cancelLabel?: string;
+  /** Optional onboarding shell for catalog detours. */
+  onboardingStep?: number;
+  title?: string;
 };
 
 export class CatalogModelPicker extends Container implements Focusable {
@@ -508,7 +511,15 @@ export class CatalogModelPicker extends Container implements Focusable {
     this.searchBox.addChild(this.search);
     this.addChild(panelBorder(theme));
     this.addChild(new Spacer(1));
-    this.addChild(new Text(theme.fg("accent", theme.bold("Choose a transcription model")), TEXT_PADDING, 0));
+    this.addChild(
+      options.onboardingStep
+        ? onboardingHeader(theme, options.title ?? "Browse all models", options.onboardingStep)
+        : new Text(
+            theme.fg("accent", theme.bold(options.title ?? "Choose a transcription model")),
+            TEXT_PADDING,
+            0,
+          ),
+    );
     this.addChild(this.preferredLine);
     this.addChild(this.body);
     this.addChild(new Spacer(1));
@@ -856,7 +867,7 @@ export function defaultSpokenLanguages(): string[] {
 export async function chooseLanguages(
   ctx: ExtensionContext,
   initial: readonly string[] = defaultSpokenLanguages(),
-  options: { cancelLabel?: string; onboarding?: boolean } = {},
+  options: { cancelLabel?: string; onboardingStep?: number } = {},
 ): Promise<LanguageSelection | undefined> {
   return ctx.ui.custom<LanguageSelection | undefined>((tui, theme, keybindings, done) =>
     new LanguagePicker(
@@ -866,7 +877,7 @@ export async function chooseLanguages(
       initial,
       options.cancelLabel ?? "close",
       done,
-      options.onboarding ?? false,
+      options.onboardingStep,
     ),
   );
 }
@@ -882,6 +893,9 @@ export async function chooseCatalogModel(
     activatedInFlow?: boolean;
     /** What Esc does once there is no search to clear. */
     cancelLabel?: string;
+    /** Optional onboarding shell for catalog detours. */
+    onboardingStep?: number;
+    title?: string;
   },
 ): Promise<CatalogModelPickerResult | undefined> {
   return ctx.ui.custom<CatalogModelPickerResult | undefined>(
@@ -898,6 +912,8 @@ export async function chooseCatalogModel(
           postActivation: options.postActivation,
           activatedInFlow: options.activatedInFlow,
           cancelLabel: options.cancelLabel,
+          onboardingStep: options.onboardingStep,
+          title: options.title,
         },
       ),
   );

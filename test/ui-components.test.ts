@@ -3,14 +3,27 @@ import assert from "node:assert/strict";
 import { initTheme } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import {
+  onboardingHeader,
   paneRowBudget,
   selectedWindow,
   SingleSelectPicker,
   windowSizeForBudget,
 } from "../src/ui-components.js";
-import { keybindings, testTheme, testTui } from "./ui-helpers.js";
+import { keybindings, stripAnsi, testTheme, testTui } from "./ui-helpers.js";
 
 initTheme("dark");
+
+test("onboarding header separates the page title from setup progress", () => {
+  const header = onboardingHeader(testTheme(), "Page title", 2);
+  const wide = stripAnsi(header.render(60)[0]!);
+  assert.equal(wide.indexOf("Page title"), 1);
+  assert.ok(wide.endsWith("pi-transcribe setup · 2 of 3"));
+  assert.ok(visibleWidth(wide) <= 60);
+
+  const narrow = stripAnsi(header.render(24)[0]!);
+  assert.match(narrow, /Page title.*2 of 3/);
+  assert.ok(visibleWidth(narrow) <= 24);
+});
 
 test("single-select picker marks the saved value separately from focus", () => {
   let selected: string | undefined;

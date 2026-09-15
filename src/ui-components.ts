@@ -6,6 +6,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import {
   Box,
+  type Component,
   Container,
   type Focusable,
   fuzzyFilter,
@@ -33,6 +34,35 @@ export function panelBorder(theme: UiTheme): DynamicBorder {
 /** The rule Pi's editor draws above and below its text. */
 export function editorBorder(theme: UiTheme): DynamicBorder {
   return new DynamicBorder((text: string) => theme.fg("borderMuted", text));
+}
+
+/** Page title on the left; quieter setup context and progress on the right. */
+export function onboardingHeader(
+  theme: UiTheme,
+  title: string,
+  step: number,
+  total = 3,
+): Component {
+  const context = `pi-transcribe setup · ${step} of ${total}`;
+  const compactContext = `${step} of ${total}`;
+  return {
+    invalidate() {},
+    render(width: number): string[] {
+      const innerWidth = Math.max(1, width - PANEL_PADDING * 2);
+      const titleWidth = visibleWidth(title);
+      const contextWidth = visibleWidth(context);
+      const left = theme.fg("accent", theme.bold(title));
+      let content: string;
+      if (titleWidth + contextWidth + 2 <= innerWidth) {
+        content = `${left}${" ".repeat(innerWidth - titleWidth - contextWidth)}${theme.fg("dim", context)}`;
+      } else {
+        const suffix = ` · ${compactContext}`;
+        const titleRoom = Math.max(1, innerWidth - visibleWidth(suffix));
+        content = `${truncateToWidth(left, titleRoom, "…")}${theme.fg("dim", suffix)}`;
+      }
+      return [truncateToWidth(`${" ".repeat(PANEL_PADDING)}${content}`, width, "")];
+    },
+  };
 }
 
 export type SingleSelectChoice<T extends string> = {

@@ -237,11 +237,14 @@ export async function changeOnboardingModel(
       ? await chooseRecommendedModel(ctx, languages, picks, activation.activate, {
           title: "Change model",
           expanded: true,
+          onboardingStep: 3,
         })
       : await chooseCatalogModel(ctx, languages, chosen?.model.id ?? current.model.id, {
           postActivation: "advance",
           onActivate: activation.activate,
           cancelLabel: "back",
+          onboardingStep: 3,
+          title: "Browse all models",
         });
     await activation.waitForCommits();
     if (!result && pane === "browse" && recommending) {
@@ -256,7 +259,7 @@ export async function changeOnboardingModel(
 
     const changed = await chooseLanguages(ctx, languages, {
       cancelLabel: "back",
-      onboarding: true,
+      onboardingStep: 3,
     });
     if (!changed?.confirmed) continue;
     // Language edits remain a draft until a model is selected. Esc back to
@@ -282,7 +285,7 @@ export async function runOnboarding(
   while (true) {
     const chosen = await chooseLanguages(ctx, languages, {
       cancelLabel: "exit",
-      onboarding: true,
+      onboardingStep: 1,
     });
     if (!chosen?.confirmed) return configured;
     languages = chosen.languages;
@@ -303,6 +306,7 @@ export async function runOnboarding(
         languages,
         picks,
         activate,
+        { onboardingStep: 2 },
       );
       await waitForCommits();
       if (!recommendation) return configured;
@@ -318,6 +322,8 @@ export async function runOnboarding(
         postActivation: "advance",
         onActivate: activate,
         cancelLabel: "back",
+        onboardingStep: 2,
+        title: "Browse all models",
       });
       await waitForCommits();
       if (selection?.type === "complete" && configured) {
