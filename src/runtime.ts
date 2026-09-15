@@ -17,6 +17,8 @@ type ActiveRecording = {
   meter: RecordingMeter;
 };
 
+const COMPLETION_WIDGET_MS = 5_000;
+
 export type PiTranscribeRuntime = {
   readonly service: TranscriptionService;
   requireConfiguredSettingsForTool(): Promise<TranscribeSettings>;
@@ -53,6 +55,7 @@ export function createPiTranscribeRuntime(
   let dictation: DictationController | undefined;
   let shuttingDown = false;
   let stopListening: (() => void) | undefined;
+  let completionWidgetTimer: ReturnType<typeof setTimeout> | undefined;
   let settings: TranscribeSettings | undefined;
   let settingsLoaded = false;
   let settingsReadWarning: string | undefined;
@@ -205,6 +208,31 @@ export function createPiTranscribeRuntime(
     stopListening = undefined;
   }
 
+  function cancelCompletionWidgetTimer(): void {
+    if (completionWidgetTimer) clearTimeout(completionWidgetTimer);
+    completionWidgetTimer = undefined;
+  }
+
+  async function dismissCompletionWidget(ctx: ExtensionContext): Promise<void> {
+    if (!completionWidgetTimer) return;
+    cancelCompletionWidgetTimer();
+    const { clearTranscribeWidget } = await loadVisualizer();
+    clearTranscribeWidget(ctx);
+  }
+
+  function holdCompletionWidget(
+    ctx: ExtensionContext,
+    clearTranscribeWidget: (ctx: ExtensionContext) => void,
+  ): void {
+    cancelCompletionWidgetTimer();
+    const timer = setTimeout(() => {
+      if (completionWidgetTimer !== timer) return;
+      completionWidgetTimer = undefined;
+      clearTranscribeWidget(ctx);
+    }, COMPLETION_WIDGET_MS);
+    completionWidgetTimer = timer;
+  }
+
   async function cancelRecording(ctx: ExtensionContext): Promise<void> {
     const active = recording;
     if (!active) return;
@@ -224,11 +252,16 @@ export function createPiTranscribeRuntime(
   }
 
   async function stopAndTranscribe(ctx: ExtensionContext): Promise<void> {
-    const { clearTranscribeWidget, showTranscribeStatus } = await loadVisualizer();
+    const {
+      clearTranscribeWidget,
+      formatTranscriptionSummary,
+      showTranscribeStatus,
+    } = await loadVisualizer();
     const active = recording!;
     recording = undefined;
     active.meter.stop({ clearWidget: false });
     showTranscribeStatus(ctx, "Transcribing…", { cancelable: true });
+    let keepCompletionVisible = false;
     try {
       const result = await active.dictation.stop();
       if (shuttingDown) return;
@@ -236,7 +269,11 @@ export function createPiTranscribeRuntime(
         await reportDictationError(ctx, active.dictation);
       } else if (result.text) {
         ctx.ui.pasteToEditor(result.text);
-        ctx.ui.notify(`Transcribed ${result.speechSeconds.toFixed(1)}s of audio`, "info");
+        showTranscribeStatus(
+          ctx,
+          formatTranscriptionSummary(result.speechSeconds, result.transcribeSeconds),
+        );
+        keepCompletionVisible = true;
       } else {
         ctx.ui.notify(`No speech detected in ${result.speechSeconds.toFixed(1)}s of audio`, "warning");
       }
@@ -244,7 +281,8 @@ export function createPiTranscribeRuntime(
       await active.dictation.dispose();
       if (dictation === active.dictation) dictation = undefined;
       clearCancelListener();
-      clearTranscribeWidget(ctx);
+      if (keepCompletionVisible) holdCompletionWidget(ctx, clearTranscribeWidget);
+      else clearTranscribeWidget(ctx);
     }
   }
 
@@ -305,6 +343,8 @@ export function createPiTranscribeRuntime(
 
   async function toggleCaptureTask(ctx: ExtensionContext): Promise<void> {
     if (shuttingDown) return;
+    // A fresh action replaces the transient completion in the shared meter slot.
+    cancelCompletionWidgetTimer();
     if (recording) {
       await stopAndTranscribe(ctx);
       return;
@@ -352,6 +392,7 @@ export function createPiTranscribeRuntime(
   }
 
   async function showSettings(ctx: ExtensionCommandContext): Promise<void> {
+    await dismissCompletionWidget(ctx);
     if (recording) {
       ctx.ui.notify(
         `Stop recording with ${displayShortcut(registeredShortcut)} before opening settings`,
@@ -381,6 +422,7 @@ export function createPiTranscribeRuntime(
   }
 
   async function replayOnboarding(ctx: ExtensionCommandContext): Promise<void> {
+    await dismissCompletionWidget(ctx);
     if (recording) {
       ctx.ui.notify(
         `Stop recording with ${displayShortcut(registeredShortcut)} before replaying onboarding`,
@@ -406,6 +448,7 @@ export function createPiTranscribeRuntime(
 
   async function shutdown(ctx: ExtensionContext): Promise<void> {
     shuttingDown = true;
+    cancelCompletionWidgetTimer();
     const disposal = dictation?.dispose();
     recording?.meter.stop();
     clearCancelListener();

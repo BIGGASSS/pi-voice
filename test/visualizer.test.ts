@@ -1,7 +1,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { renderMeterLine, SpectrumAnalyzer } from "../src/visualizer.js";
+import {
+  formatTranscriptionSummary,
+  renderMeterLine,
+  SpectrumAnalyzer,
+} from "../src/visualizer.js";
 import { stripAnsi, testTheme } from "./ui-helpers.js";
+
+test("completion summary is shared display data", () => {
+  assert.equal(
+    formatTranscriptionSummary(12.34, 1.4),
+    "Transcribed 12.3s of audio in 1.4s",
+  );
+});
 
 test("meter line carries the bands, elapsed time, model state, and hint", () => {
   const silent = new SpectrumAnalyzer();

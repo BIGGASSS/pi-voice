@@ -106,6 +106,14 @@ export function formatElapsed(ms: number): string {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
+/** Shared completion summary for regular dictation and the onboarding test. */
+export function formatTranscriptionSummary(
+  audioSeconds: number,
+  transcribeSeconds: number,
+): string {
+  return `Transcribed ${audioSeconds.toFixed(1)}s of audio in ${transcribeSeconds.toFixed(1)}s`;
+}
+
 export function showTranscribeStatus(
   ctx: ExtensionContext,
   text: string,
