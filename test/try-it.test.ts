@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { initTheme } from "@earendil-works/pi-coding-agent";
-import { formatTryItTiming, needsFasterModel, TryItPane } from "../src/try-it.js";
+import { needsFasterModel, TryItPane } from "../src/try-it.js";
 import type { TranscribeSettings } from "../src/settings.js";
 import type { TranscriptionService } from "../src/transcription-service.js";
 import { keybindings, stripAnsi, testTheme, testTui } from "./ui-helpers.js";
@@ -34,6 +34,21 @@ function pendingService(): TranscriptionService {
   } as unknown as TranscriptionService;
 }
 
+function readyService(transcript: string): TranscriptionService {
+  return {
+    reserveDictation: () => ({
+      ready: Promise.resolve(),
+      feed() {},
+      submit: async () => transcript,
+      cancel() {},
+    }),
+  } as unknown as TranscriptionService;
+}
+
+function settle(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 test("Try It renders its configured controls", async () => {
   const pane = new TryItPane(
     testTui(24),
@@ -44,13 +59,6 @@ test("Try It renders its configured controls", async () => {
     () => undefined,
   );
   const body = stripAnsi(pane.render(80).join("\n"));
-  assert.match(body, /Try it/);
-  assert.match(
-    body,
-    /Give it a try: Press Ctrl\+(Option|Alt)\+Z to start recording\. Press it again to stop\./,
-  );
-  assert.doesNotMatch(body, /Ready to listen/);
-  assert.match(body, /Your transcript will appear here\./);
   const lines = body.split("\n");
   const shortcutLine = lines.find((line) => line.includes("Shortcut:"));
   const microphoneLine = lines.find((line) => line.includes("Microphone:"));
@@ -58,6 +66,38 @@ test("Try It renders its configured controls", async () => {
   assert.ok(shortcutLine && microphoneLine && modelLine);
   assert.equal(shortcutLine.indexOf("Ctrl"), microphoneLine.indexOf("System default"));
   assert.equal(shortcutLine.indexOf("Ctrl"), modelLine.indexOf("Parakeet Unified"));
+  await pane.dispose();
+});
+
+test("Try It replaces the meter with the completion summary above the transcript", async () => {
+  const pane = new TryItPane(
+    testTui(24),
+    testTheme(),
+    keybindings(),
+    settings,
+    readyService("hello"),
+    () => undefined,
+    {
+      createCapture: () => ({
+        start() {},
+        stop: async () => ({ pcm: new Float32Array(16_000) }),
+      }) as never,
+    },
+  );
+
+  const shortcut = "\x1b[122;7u"; // Kitty protocol: Ctrl+Alt+Z
+  pane.handleInput(shortcut);
+  await settle();
+  assert.match(stripAnsi(pane.render(80).join("\n")), /▁▁▁/);
+
+  pane.handleInput(shortcut);
+  await settle();
+  const lines = stripAnsi(pane.render(80).join("\n")).split("\n");
+  const summary = lines.findIndex((line) => line.trimStart().startsWith("Transcribed "));
+  assert.ok(summary >= 0);
+  assert.match(lines[summary + 1] ?? "", /^─+$/);
+  assert.equal(lines[summary + 2]?.trim(), "hello");
+  assert.match(lines[summary + 3] ?? "", /^─+$/);
   await pane.dispose();
 });
 
@@ -79,11 +119,7 @@ test("Try It maps the settings shortcuts to host actions", async () => {
   }
 });
 
-test("Try It timing is plain data and the speed nudge ignores short takes", () => {
-  assert.equal(
-    formatTryItTiming(12.34, 1.4, "Qwen3-ASR 0.6B"),
-    "12.3 s audio · 1.4 s to transcribe · 8.8× real time · Qwen3-ASR 0.6B",
-  );
+test("Try It speed nudge ignores short takes", () => {
   assert.equal(needsFasterModel(30, 6), true);
   assert.equal(needsFasterModel(30, 5), false);
   assert.equal(needsFasterModel(3, 2), false);

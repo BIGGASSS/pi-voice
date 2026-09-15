@@ -7,7 +7,7 @@ import {
   type KeybindingsManager,
   type TUI,
 } from "@earendil-works/pi-tui";
-import { createMicrophoneCapture } from "./audio.js";
+import { createMicrophoneCapture, testMicrophonePermission } from "./audio.js";
 import { getCatalogModel } from "./catalog.js";
 import { DictationController, type DictationControllerOptions } from "./dictation-controller.js";
 import { microphoneSummary } from "./microphone-picker.js";
@@ -16,10 +16,20 @@ import type { TranscribeSettings } from "./settings.js";
 import { displayShortcut } from "./shortcut-core.js";
 import { TranscriptionService } from "./transcription-service.js";
 import { TranscriptPreview } from "./transcript-preview.js";
-import { editorBorder, PANEL_PADDING, panelBorder, paneRowBudget } from "./ui-components.js";
-import { METER_UPDATE_MS, renderMeterLine, SpectrumAnalyzer } from "./visualizer.js";
+import { editorBorder, onboardingHeader, PANEL_PADDING, panelBorder, paneRowBudget } from "./ui-components.js";
+import {
+  formatTranscriptionSummary,
+  METER_UPDATE_MS,
+  renderMeterLine,
+  SpectrumAnalyzer,
+} from "./visualizer.js";
 
 type UiTheme = ExtensionContext["ui"]["theme"];
+
+type TryItPaneOptions = Pick<DictationControllerOptions, "createCapture" | "now"> & {
+  /** Shown only before the first recording attempt when macOS has not asked yet. */
+  showMacPermissionNote?: boolean;
+};
 
 export type TryItResult =
   | { action: "done" }
@@ -33,15 +43,6 @@ const MIN_SPEECH_SECONDS_TO_JUDGE = 5;
 
 export function realTimeFactor(speechSeconds: number, transcribeSeconds: number): number {
   return speechSeconds / Math.max(transcribeSeconds, 0.05);
-}
-
-export function formatTryItTiming(
-  speechSeconds: number,
-  transcribeSeconds: number,
-  modelName: string,
-): string {
-  const factor = realTimeFactor(speechSeconds, transcribeSeconds);
-  return `${speechSeconds.toFixed(1)} s audio · ${transcribeSeconds.toFixed(1)} s to transcribe · ${factor.toFixed(1)}× real time · ${modelName}`;
 }
 
 export function needsFasterModel(speechSeconds: number, transcribeSeconds: number): boolean {
@@ -59,6 +60,7 @@ export class TryItPane implements Component {
   private nextPaintAt = 0;
   private disposed = false;
   private closed = false;
+  private showMacPermissionNote: boolean;
 
   constructor(
     private readonly tui: TUI,
@@ -67,8 +69,9 @@ export class TryItPane implements Component {
     private readonly settings: TranscribeSettings,
     service: Pick<TranscriptionService, "reserveDictation">,
     private readonly done: (result: TryItResult) => void,
-    options: Pick<DictationControllerOptions, "createCapture" | "now"> = { createCapture: createMicrophoneCapture },
+    options: TryItPaneOptions = { createCapture: createMicrophoneCapture },
   ) {
+    this.showMacPermissionNote = options.showMacPermissionNote ?? false;
     this.dictation = new DictationController(service, {
       ...options,
       onChange: () => this.refresh(),
@@ -96,40 +99,38 @@ export class TryItPane implements Component {
     const state = this.dictation.state;
     const shortcut = displayShortcut(this.settings.shortcut);
     const modelName = getCatalogModel(this.settings.model.id)?.name ?? this.settings.model.id;
-    const title = "Set up pi-transcribe · 3 of 3 · Try it";
+    const title = "Try it";
     const fg = (color: Parameters<UiTheme["fg"]>[0], text: string) => this.theme.fg(color, text);
     const text = (value: string) => new Text(value, PANEL_PADDING, 0).render(width);
     const line = (value: string) => truncateToWidth(` ${value}`, width);
-    let status = "";
-    let content = "";
-    let nudge = "";
+    let activity = "";
+    let content = fg("dim", "Your transcript will appear here.");
+    let details = "";
     if (state.phase === "listening") {
-      status = renderMeterLine(this.theme, {
+      activity = renderMeterLine(this.theme, {
         bands: this.analyzer.bands, elapsedMs: this.dictation.elapsedMs,
         modelState: this.dictation.modelState,
       });
     } else if (state.phase === "transcribing") {
-      status = fg("accent", "Transcribing…");
+      activity = fg("accent", "Transcribing…");
     } else if (state.phase === "starting") {
-      status = fg("muted", "Starting microphone…");
+      activity = fg("muted", "Starting microphone…");
     } else if (state.phase === "cancelling") {
-      status = fg("muted", "Cancelling…");
+      activity = fg("muted", "Cancelling…");
     } else if (state.phase === "result") {
       const { text: transcript, speechSeconds, transcribeSeconds } = state.result;
-      status = fg("muted", formatTryItTiming(speechSeconds, transcribeSeconds, modelName));
       content = transcript || fg("muted", "No speech detected");
+      activity = fg("muted", formatTranscriptionSummary(speechSeconds, transcribeSeconds));
       if (needsFasterModel(speechSeconds, transcribeSeconds)) {
-        nudge = fg("warning", "Slow on this machine? Press c to try another model.");
+        details = fg("warning", "Slow on this machine? Press c to try another model.");
       }
     } else if (state.phase === "error") {
-      status = fg("error", state.stage === "model" ? "Could not load the model" : state.stage === "capture" ? "Microphone capture failed" : "Transcription failed");
+      activity = fg("error", state.stage === "model" ? "Could not load the model" : state.stage === "capture" ? "Microphone capture failed" : "Transcription failed");
       const message = state.cause instanceof Error ? state.cause.message : String(state.cause);
-      content = fg("error", message);
+      details = fg("error", message);
       if (state.stage === "capture" && process.platform === "darwin") {
-        content += "\nCheck System Settings → Privacy & Security → Microphone for your terminal app.";
+        details += "\nCheck System Settings → Privacy & Security → Microphone for your terminal app.";
       }
-    } else {
-      content = fg("dim", "Your transcript will appear here.");
     }
     this.preview.setText(content);
 
@@ -156,54 +157,67 @@ export class TryItPane implements Component {
         : `${labelColumn}${value}`;
       return fg("muted", body) + fg("dim", suffix);
     };
-    const header = (compact: boolean): string[] => {
+    const instructions = (compact: boolean) => compact
+      ? `${shortcut} starts/stops recording`
+      : `Press ${shortcut} to record, start speaking, then press again to transcribe.`;
+    const topChrome = (compact: boolean): string[] => [
+      ...panelBorder(this.theme).render(width),
+      ...(compact ? [] : [""]),
+      ...onboardingHeader(this.theme, title, 3).render(width),
+      ...(compact ? [] : [""]),
+      ...(compact ? [line(instructions(true))] : text(instructions(false))),
+      ...(compact ? [] : [""]),
+      ...(activity ? (compact ? [line(activity)] : text(activity)) : []),
+    ];
+    const bottomChrome = (compact: boolean): string[] => {
       const render = compact ? (value: string) => [line(value)] : text;
+      const permission = !compact && this.showMacPermissionNote
+        ? [
+            ...text(fg("muted", "macOS will ask for microphone access the first time. Your terminal may need to be restarted.")),
+            "",
+          ]
+        : compact || details ? [] : [""];
       return [
-        ...panelBorder(this.theme).render(width),
-        ...(compact ? [] : [""]),
-        ...render(fg("accent", this.theme.bold(title))),
-        ...(!compact && process.platform === "darwin"
-          ? text(fg("muted", "macOS will ask for microphone access the first time. Your terminal may need to be restarted.")) : []),
-        ...(compact ? [] : [""]),
+        ...(details ? [...text(details), ...(compact ? [] : [""])] : []),
+        ...permission,
         ...render(setting("Shortcut", shortcut, "s", compact)),
         ...render(setting("Microphone", microphoneSummary(this.settings.microphone), "m", compact)),
         ...render(setting("Model", modelName, "c", compact)),
         ...(compact ? [] : [""]),
-        ...render(
-          state.phase === "idle" || state.phase === "ready"
-            ? compact
-              ? `${shortcut} starts/stops recording`
-              : `Give it a try: Press ${shortcut} to start recording. Press it again to stop.`
-            : status,
-        ),
-        ...(nudge ? render(nudge) : []),
+        ...text(hints),
+        ...(compact ? [] : [""]),
+        ...panelBorder(this.theme).render(width),
       ];
     };
+
     const budget = Math.max(1, paneRowBudget(this.tui) ?? 32);
-    let top = header(false);
-    let bottom = ["", ...text(hints), "", ...panelBorder(this.theme).render(width)];
-    // Reserve a useful preview, not merely whatever is left after wrapped metadata.
+    const frame = budget >= 6 ? editorBorder(this.theme).render(width) : [];
+    const frameRows = frame.length * 2;
+    let top = topChrome(false);
+    let bottom = bottomChrome(false);
+    // Reserve useful room for a transcript or error before switching to the compact chrome.
     const previewReserve = state.phase === "result" || state.phase === "error" ? 5 : 3;
-    if (top.length + bottom.length + previewReserve > budget) {
-      top = header(true);
+    if (top.length + bottom.length + frameRows + previewReserve > budget) {
+      top = topChrome(true);
+      bottom = bottomChrome(true);
+    }
+    if (top.length + bottom.length + frameRows + 1 > budget) {
+      // Tiny terminals: drop settings, but keep the task and current actions visible.
+      top = [
+        ...onboardingHeader(this.theme, title, 3).render(width),
+        line(instructions(true)),
+      ];
       bottom = [...text(hints), ...panelBorder(this.theme).render(width)];
     }
-    if (top.length + bottom.length + 3 > budget) {
-      // Tiny terminals: drop optional metadata, never the result or action keys.
-      top = [line(fg("accent", title)), line(status)];
-    }
-    const rule = budget >= 6 ? editorBorder(this.theme).render(width) : [];
-    bottom = bottom.slice(0, Math.max(0, budget - rule.length * 2 - 1));
-    top = top.slice(0, Math.max(0, budget - bottom.length - rule.length * 2 - 1));
-    const available = Math.max(1, budget - top.length - bottom.length - rule.length * 2);
-    return [
-      ...top, ...rule,
-      ...this.preview.render(width, available, (value) => fg("dim", value)),
-      ...rule, ...bottom,
-    ];
+    bottom = bottom.slice(0, Math.max(0, budget - frameRows - 1));
+    top = top.slice(0, Math.max(0, budget - bottom.length - frameRows - 1));
+    const available = Math.max(1, budget - top.length - bottom.length - frameRows);
+    const preview = this.preview.render(width, available, (value) => fg("dim", value));
+    return [...top, ...frame, ...preview, ...frame, ...bottom];
   }
 
   private start(): void {
+    this.showMacPermissionNote = false;
     this.preview.setText("");
     this.analyzer.reset();
     this.nextPaintAt = 0;
@@ -260,11 +274,15 @@ export class TryItPane implements Component {
 }
 
 export async function tryVoice(ctx: ExtensionContext, settings: TranscribeSettings): Promise<TryItResult | undefined> {
+  const permission = await testMicrophonePermission();
   const service = new TranscriptionService();
   let pane: TryItPane | undefined;
   try {
     return await ctx.ui.custom<TryItResult>((tui, theme, keybindings, done) =>
-      (pane = new TryItPane(tui, theme, keybindings, settings, service, done)),
+      (pane = new TryItPane(tui, theme, keybindings, settings, service, done, {
+        createCapture: createMicrophoneCapture,
+        showMacPermissionNote: permission.status === "not-determined",
+      })),
     );
   } finally {
     await pane?.dispose();
