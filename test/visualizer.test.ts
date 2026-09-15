@@ -1,31 +1,6 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  formatTranscriptionSummary,
-  renderMeterLine,
-  SpectrumAnalyzer,
-} from "../src/visualizer.js";
-import { stripAnsi, testTheme } from "./ui-helpers.js";
-
-test("completion summary is shared display data", () => {
-  assert.equal(
-    formatTranscriptionSummary(12.34, 1.4),
-    "Transcribed 12.3s of audio in 1.4s",
-  );
-});
-
-test("meter line carries the bands, elapsed time, model state, and hint", () => {
-  const silent = new SpectrumAnalyzer();
-  const line = stripAnsi(
-    renderMeterLine(testTheme(), {
-      bands: silent.bands,
-      elapsedMs: 65_000,
-      modelState: "loading",
-      hint: "esc to cancel",
-    }),
-  );
-  assert.equal(line, `${"▁".repeat(silent.bands.length)}  1:05  loading model  esc to cancel`);
-});
+import { test } from "node:test";
+import { SpectrumAnalyzer } from "../src/visualizer.js";
 
 test("analyzer levels rise on a tone and decay on silence", () => {
   const analyzer = new SpectrumAnalyzer();

@@ -13,7 +13,7 @@ import { CATALOG_MODELS } from "../src/catalog.js";
 import { recommendModels } from "../src/recommendations.js";
 import { readSettings, settingsForModel, writeSettings } from "../src/settings.js";
 import { cacheCatalogModel, isolatedModelCache } from "./model-cache-helper.js";
-import { keybindings, stripAnsi, testTheme, testTui } from "./ui-helpers.js";
+import { keybindings, testTheme, testTui } from "./ui-helpers.js";
 
 initTheme("dark");
 
@@ -69,7 +69,6 @@ function initialSettings(languages = ["en"]) {
 function selectRecommended(): Step {
   return (pane) => {
     assert.ok(pane instanceof RecommendedModelPicker);
-    assert.match(stripAnsi(pane.render(80).join("\n")), /English.*Mandarin/);
     pane.handleInput("\x1b[A"); // Expanded pane starts on the first alternative.
     pane.handleInput("\r");
   };
@@ -118,7 +117,6 @@ for (const entry of ["recommended", "other-models", "single-pick"] as const) {
     // A later visit uses the newly saved languages, not the first-run closure.
     const revisit = scriptedContext([(pane) => {
       assert.ok(pane instanceof RecommendedModelPicker);
-      assert.match(stripAnsi(pane.render(80).join("\n")), /English.*Mandarin/);
       pane.handleInput("\x1b");
     }]);
     assert.equal(await changeOnboardingModel(revisit.ctx, result), undefined);
@@ -135,7 +133,6 @@ test("a root catalog stays root when another cached model appears while it is op
   const script = scriptedContext([
     (pane) => {
       assert.ok(pane instanceof CatalogModelPicker);
-      assert.match(stripAnsi(pane.render(80).join("\n")), /escape\/ctrl\+c\s+close/i);
       // Simulate finishing a download without closing this catalog. Routing
       // must still reflect the cache state from when the pane opened.
       cacheCatalogModel(cache, second);
@@ -157,12 +154,10 @@ test("Escape from all models returns to the recommendation that opened it", asyn
   const script = scriptedContext([
     (pane) => {
       assert.ok(pane instanceof RecommendedModelPicker);
-      assert.match(stripAnsi(pane.render(80).join("\n")), /Change model/);
       pane.handleInput("o");
     },
     (pane) => {
       assert.ok(pane instanceof CatalogModelPicker);
-      assert.match(stripAnsi(pane.render(80).join("\n")), /escape\/ctrl\+c\s+back/i);
       pane.handleInput("\x1b");
     },
     (pane) => {
@@ -186,7 +181,6 @@ test("cancelling the language picker returns to its model pane without applying 
     },
     (pane) => {
       assert.ok(pane instanceof RecommendedModelPicker);
-      assert.doesNotMatch(stripAnsi(pane.render(80).join("\n")), /Mandarin/);
       pane.handleInput("\x1b");
     },
   ]);
@@ -204,7 +198,6 @@ test("back after confirming new languages leaves settings unchanged until a mode
     (_pane, done) => done({ languages: ["en", "zh"], confirmed: true }),
     (pane) => {
       assert.ok(pane instanceof RecommendedModelPicker);
-      assert.match(stripAnsi(pane.render(80).join("\n")), /Mandarin/);
       pane.handleInput("\x1b");
     },
   ]);

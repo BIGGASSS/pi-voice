@@ -24,7 +24,3 @@ export function testTui(rows?: number): TUI {
 export function keybindings(): KeybindingsManager {
   return new KeybindingsManager(TUI_KEYBINDINGS);
 }
-
-export function stripAnsi(value: string): string {
-  return value.replace(/\u001b\[[0-9;]*m/g, "");
-}
