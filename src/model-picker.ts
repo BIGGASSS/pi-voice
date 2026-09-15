@@ -1,17 +1,10 @@
-import {
-  keyHint,
-  keyText,
-  rawKeyHint,
-  type ExtensionContext,
-} from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   Box,
   Container,
   type Focusable,
   fuzzyFilter,
   Input,
-  Key,
-  matchesKey,
   Spacer,
   Text,
   truncateToWidth,
@@ -45,9 +38,10 @@ import {
   ROLE_LABELS,
 } from "./model-cells.js";
 import { ModelSelectionController } from "./model-selection-controller.js";
-import { isRatingsHelpKey, ModelRatingsHelp } from "./model-ratings-help.js";
+import { ModelRatingsHelp } from "./model-ratings-help.js";
 import type { CatalogModelActivation } from "./model-activation.js";
 import { findIncompleteDownload } from "./models.js";
+import { TranscribeKeys } from "./keybindings.js";
 import type { TranscriptionLanguage } from "./settings.js";
 import {
   DownloadPanel,
@@ -133,16 +127,19 @@ export class LanguagePicker extends Container implements Focusable {
     this.search.focused = value;
   }
 
+  private readonly keys: TranscribeKeys;
+
   constructor(
     private readonly tui: TUI,
     private readonly theme: UiTheme,
-    private readonly keybindings: KeybindingsManager,
+    keybindings: KeybindingsManager,
     initial: readonly string[],
     private readonly cancelLabel: string,
     private readonly done: (result: LanguageSelection | undefined) => void,
     private readonly onboardingStep?: number,
   ) {
     super();
+    this.keys = new TranscribeKeys(keybindings);
     // Benchmark filtering controls new choices, not existing preferences.
     // Keep saved languages visible and removable even if their support worsens.
     this.selected = new Set(initial.map(languageIdentity).filter(Boolean));
@@ -264,7 +261,7 @@ export class LanguagePicker extends Container implements Focusable {
     const selected = this.selectedLanguages();
     const onContinue = this.selectedIndex === this.continueRowIndex();
     const continuePrefix = onContinue ? this.theme.fg("accent", "→ ") : "  ";
-    const continueAction = ` ${keyText("tui.input.tab")}  Continue `;
+    const continueAction = ` ${this.keys.keyText("transcribe.languages.continue")}  Continue `;
     const continueRow = selected.length === 0
       ? this.theme.fg("warning", "Select at least one language to continue")
       : this.theme.inverse(
@@ -274,7 +271,7 @@ export class LanguagePicker extends Container implements Focusable {
     this.list.addChild(new Text(`${continuePrefix}${continueRow}`, LIST_PADDING, 0));
 
     this.footer.setText(
-      `${rawKeyHint("↑↓", "move")}  ${rawKeyHint("space/enter", "select")}  ${keyHint("tui.select.cancel", query ? "clear search" : this.cancelLabel)}`,
+      `${this.keys.navHint("move")}  ${this.keys.hint(["transcribe.languages.toggle", "tui.select.confirm"], "select")}  ${this.keys.hint("tui.select.cancel", query ? "clear search" : this.cancelLabel)}`,
     );
     this.tui.requestRender();
   }
@@ -318,26 +315,26 @@ export class LanguagePicker extends Container implements Focusable {
 
   handleInput(data: string): void {
     const lastIndex = this.continueRowIndex();
-    if (this.keybindings.matches(data, "tui.input.tab")) {
+    if (this.keys.matches(data, "transcribe.languages.continue")) {
       const selected = this.selectedLanguages();
       if (selected.length > 0) this.done({ languages: selected, confirmed: true });
       return;
     }
-    if (this.keybindings.matches(data, "tui.select.up")) {
+    if (this.keys.matches(data, "tui.select.up")) {
       this.selectedIndex = this.selectedIndex === 0 ? lastIndex : this.selectedIndex - 1;
       this.refresh();
       return;
     }
-    if (this.keybindings.matches(data, "tui.select.down")) {
+    if (this.keys.matches(data, "tui.select.down")) {
       this.selectedIndex = this.selectedIndex === lastIndex ? 0 : this.selectedIndex + 1;
       this.refresh();
       return;
     }
-    if (matchesKey(data, Key.space)) {
+    if (this.keys.matches(data, "transcribe.languages.toggle")) {
       this.toggleHighlighted();
       return;
     }
-    if (this.keybindings.matches(data, "tui.select.confirm")) {
+    if (this.keys.matches(data, "tui.select.confirm")) {
       if (this.selectedIndex === this.continueRowIndex()) {
         const selected = this.selectedLanguages();
         if (selected.length > 0) this.done({ languages: selected, confirmed: true });
@@ -348,7 +345,7 @@ export class LanguagePicker extends Container implements Focusable {
       this.toggleHighlighted();
       return;
     }
-    if (this.keybindings.matches(data, "tui.select.cancel")) {
+    if (this.keys.matches(data, "tui.select.cancel")) {
       if (this.search.getValue()) {
         this.search.setValue("");
         this.selectedIndex = 0;
@@ -436,10 +433,12 @@ export class CatalogModelPicker extends Container implements Focusable {
     this.search.focused = value && !this.selection.download && !this.ratingsHelp.isOpen;
   }
 
+  private readonly keys: TranscribeKeys;
+
   constructor(
     private readonly tui: TUI,
     private readonly theme: UiTheme,
-    private readonly keybindings: KeybindingsManager,
+    keybindings: KeybindingsManager,
     private readonly preferredLanguages: readonly string[],
     currentModelId: string | undefined,
     private readonly done: (result: CatalogModelPickerResult | undefined) => void,
@@ -447,8 +446,9 @@ export class CatalogModelPicker extends Container implements Focusable {
     options: CatalogModelPickerOptions = {},
   ) {
     super();
+    this.keys = new TranscribeKeys(keybindings);
     this.cancelLabel = options.cancelLabel ?? "close";
-    this.ratingsHelp = new ModelRatingsHelp(tui, theme, keybindings, true);
+    this.ratingsHelp = new ModelRatingsHelp(tui, theme, this.keys, true);
     this.selection = new ModelSelectionController<CatalogModelPickerResult | undefined>((...args) => this.onActivate(...args), {
       models: CATALOG_MODELS,
       currentModelId,
@@ -630,7 +630,7 @@ export class CatalogModelPicker extends Container implements Focusable {
     if (!this.selection.download) this.stopSpinner();
     const preferredAction = this.selection.selectedDuringSession
       ? ""
-      : ` · ${keyHint("tui.input.tab", "change")}`;
+      : ` · ${this.keys.hint("transcribe.languages.change", "change")}`;
     const languagesText = truncateToWidth(
       `Languages: ${this.preferredLanguages.map(displayLanguage).join(", ")}`,
       Math.max(24, this.renderWidth - TEXT_PADDING * 2 - visibleWidth(preferredAction)),
@@ -640,7 +640,7 @@ export class CatalogModelPicker extends Container implements Focusable {
     this.search.focused = this._focused && !this.selection.download && !this.ratingsHelp.isOpen;
 
     if (this.selection.download) {
-      this.downloadPanel ??= new DownloadPanel(this.tui, this.theme, this.selection.download);
+      this.downloadPanel ??= new DownloadPanel(this.tui, this.theme, this.keys, this.selection.download);
       this.downloadPanel.update(this.selection.download, this.downloadStats());
       this.body.addChild(this.downloadPanel);
       this.tui.requestRender();
@@ -763,7 +763,7 @@ export class CatalogModelPicker extends Container implements Focusable {
           : `download ${formatBinarySize(highlighted.size)}`
         : "choose";
     this.footer.setText(
-      `${this.theme.fg("dim", shown)}  ${statusLegend}  ${rawKeyHint("?", "rating guide")}\n${rawKeyHint("↑↓", "navigate")}  ${keyHint("tui.select.confirm", confirmLabel)}  ${keyHint("tui.select.cancel", closeLabel)}`,
+      `${this.theme.fg("dim", shown)}  ${statusLegend}  ${this.keys.hint("transcribe.models.ratingsHelp", "rating guide")}\n${this.keys.navHint("navigate")}  ${this.keys.hint("tui.select.confirm", confirmLabel)}  ${this.keys.hint("tui.select.cancel", closeLabel)}`,
     );
     this.tui.requestRender();
   }
@@ -799,30 +799,33 @@ export class CatalogModelPicker extends Container implements Focusable {
       // ignoring everything except cancel cannot read as a dead keyboard.
       // Stopping is cheap: the partial file stays in the cache, and selecting
       // the model again resumes from where it left off.
-      if (this.keybindings.matches(data, "tui.select.cancel")) this.selection.cancelDownload();
+      if (this.keys.matches(data, "tui.select.cancel")) this.selection.cancelDownload();
       return;
     }
 
-    if (isRatingsHelpKey(data)) {
+    if (this.keys.matches(data, "transcribe.models.ratingsHelp")) {
       this.ratingsHelp.open();
       this.focused = this._focused;
       return;
     }
-    if (this.keybindings.matches(data, "tui.input.tab")) {
-      if (!this.selection.selectedDuringSession) {
-        this.selection.requestExit({ type: "change-languages" });
-      }
+    // Tab policy: see TRANSCRIBE_KEYBINDINGS. Also keeps it out of the search.
+    if (this.keys.matches(data, "transcribe.languages.continue")) return;
+    if (
+      !this.selection.selectedDuringSession &&
+      this.keys.matches(data, "transcribe.languages.change")
+    ) {
+      this.selection.requestExit({ type: "change-languages" });
       return;
     }
-    if (this.keybindings.matches(data, "tui.select.up")) {
+    if (this.keys.matches(data, "tui.select.up")) {
       this.moveSelection(-1);
       return;
     }
-    if (this.keybindings.matches(data, "tui.select.down")) {
+    if (this.keys.matches(data, "tui.select.down")) {
       this.moveSelection(1);
       return;
     }
-    if (this.keybindings.matches(data, "tui.select.confirm")) {
+    if (this.keys.matches(data, "tui.select.confirm")) {
       if (this.rows[this.selectedIndex]?.type === "fold") {
         this.folded = !this.folded;
         this.refresh();
@@ -835,7 +838,7 @@ export class CatalogModelPicker extends Container implements Focusable {
       this.selection.select(selected);
       return;
     }
-    if (this.keybindings.matches(data, "tui.select.cancel")) {
+    if (this.keys.matches(data, "tui.select.cancel")) {
       if (this.search.getValue()) {
         this.search.setValue("");
         this.selectedIndex = 0;

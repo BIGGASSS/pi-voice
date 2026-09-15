@@ -3,10 +3,11 @@ import type {
   ExtensionCommandContext,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { matchesKey } from "@earendil-works/pi-tui";
+import { getKeybindings } from "@earendil-works/pi-tui";
 import { existsSync } from "node:fs";
 import { displayLanguage, getCatalogModel } from "./catalog.js";
 import { DictationController } from "./dictation-controller.js";
+import { TranscribeKeys } from "./keybindings.js";
 import type { TranscribeSettings } from "./settings.js";
 import { displayShortcut } from "./shortcut-core.js";
 import { TranscriptionService } from "./transcription-service.js";
@@ -18,6 +19,9 @@ type ActiveRecording = {
 };
 
 const COMPLETION_WIDGET_MS = 5_000;
+/** Setup confirmation stays long enough to read the shortcut; a changed shortcut longer still. */
+const READY_WIDGET_MS = 10_000;
+const RELOAD_WIDGET_MS = 20_000;
 
 export type PiTranscribeRuntime = {
   readonly service: TranscriptionService;
@@ -86,17 +90,30 @@ export function createPiTranscribeRuntime(
     settingsReadWarning = undefined;
   }
 
-  function notifyReady(ctx: ExtensionContext, configured: TranscribeSettings): void {
+  async function notifyReady(ctx: ExtensionContext, configured: TranscribeSettings): Promise<void> {
     const model = getCatalogModel(configured.model.id);
     const languages = configured.preferredLanguages.map(displayLanguage).join(", ");
     // Pi binds shortcuts at extension load. The command path reloads on its
     // own; the shortcut path cannot, so say what it takes to use a new one.
-    const talk = configured.shortcut === registeredShortcut
-      ? `${displayShortcut(configured.shortcut)} to talk`
-      : `run /reload, then ${displayShortcut(configured.shortcut)} to talk`;
-    ctx.ui.notify(
-      `✓ pi-transcribe ready · ${talk}\n${languages} · ${model?.name ?? configured.model.id} · /transcribe for settings`,
-      "info",
+    const reloadNeeded = configured.shortcut !== registeredShortcut;
+    const talk = reloadNeeded
+      ? `run /reload, then ${displayShortcut(configured.shortcut)} to talk`
+      : `${displayShortcut(configured.shortcut)} to talk`;
+    const summary = `${languages} · ${model?.name ?? configured.model.id} · /transcribe for settings`;
+
+    // The TUI renders a success-colored widget in the meter slot so the user
+    // sees where pi-transcribe talks to them. RPC and print keep the plain
+    // notification: RPC forwards widget lines verbatim, so theme escapes leak.
+    if (ctx.mode !== "tui") {
+      ctx.ui.notify(`✓ pi-transcribe ready · ${talk}\n${summary}`, "info");
+      return;
+    }
+    const { clearTranscribeWidget, showReadyStatus } = await loadVisualizer();
+    showReadyStatus(ctx, { talk, summary });
+    holdCompletionWidget(
+      ctx,
+      clearTranscribeWidget,
+      reloadNeeded ? RELOAD_WIDGET_MS : READY_WIDGET_MS,
     );
   }
 
@@ -161,7 +178,7 @@ export function createPiTranscribeRuntime(
     const configured = previous
       ? await configureModel(ctx, previous)
       : await configureFirstRun(ctx);
-    if (configured) notifyReady(ctx, configured);
+    if (configured) await notifyReady(ctx, configured);
     return { configured, completedFirstRun: previous === undefined && configured !== undefined };
   }
 
@@ -188,8 +205,10 @@ export function createPiTranscribeRuntime(
   function listenForCancel(ctx: ExtensionContext): void {
     stopListening?.();
     if (!ctx.hasUI) return;
+    // No pane here to receive an injected manager; pi's global is the same one.
+    const keys = new TranscribeKeys(getKeybindings());
     stopListening = ctx.ui.onTerminalInput((data) => {
-      if (!matchesKey(data, "escape")) return;
+      if (!keys.matches(data, "transcribe.dictation.cancel")) return;
       if (recording) {
         void runExclusive(ctx, () => cancelRecording(ctx));
         return { consume: true };
@@ -223,13 +242,14 @@ export function createPiTranscribeRuntime(
   function holdCompletionWidget(
     ctx: ExtensionContext,
     clearTranscribeWidget: (ctx: ExtensionContext) => void,
+    durationMs = COMPLETION_WIDGET_MS,
   ): void {
     cancelCompletionWidgetTimer();
     const timer = setTimeout(() => {
       if (completionWidgetTimer !== timer) return;
       completionWidgetTimer = undefined;
       clearTranscribeWidget(ctx);
-    }, COMPLETION_WIDGET_MS);
+    }, durationMs);
     completionWidgetTimer = timer;
   }
 
@@ -368,7 +388,9 @@ export function createPiTranscribeRuntime(
     if (configured && !completedFirstRun) await startRecording(ctx, configured);
     // The meter shares the widget slot and has replaced the spinner when
     // recording began; clear the spinner only when recording never started.
-    if (!recording) clearTranscribeWidget(ctx);
+    // A finished first-run setup leaves the Ready widget in that slot with a
+    // hold timer armed, so leave that one alone.
+    if (!recording && !completionWidgetTimer) clearTranscribeWidget(ctx);
   }
 
   function runExclusive(
@@ -442,7 +464,7 @@ export function createPiTranscribeRuntime(
       rememberSettings(configured);
       // End on the same Ready state as first-run setup. A replay should expose
       // the complete user flow rather than a debug-only completion message.
-      notifyReady(ctx, configured);
+      await notifyReady(ctx, configured);
     });
   }
 

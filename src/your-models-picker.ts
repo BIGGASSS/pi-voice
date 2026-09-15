@@ -1,15 +1,9 @@
-import {
-  keyHint,
-  keyText,
-  rawKeyHint,
-  type ExtensionContext,
-} from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   Box,
   Container,
   type Focusable,
   Input,
-  matchesKey,
   Spacer,
   Text,
   visibleWidth,
@@ -32,7 +26,8 @@ import {
 } from "./model-cells.js";
 import type { CatalogModelPostActivation } from "./model-picker.js";
 import { ModelSelectionController } from "./model-selection-controller.js";
-import { isRatingsHelpKey, ModelRatingsHelp } from "./model-ratings-help.js";
+import { ModelRatingsHelp } from "./model-ratings-help.js";
+import { TranscribeKeys } from "./keybindings.js";
 import { findCachedCatalogModel } from "./models.js";
 import { benchmarkModels } from "./recommendations.js";
 import {
@@ -70,7 +65,8 @@ type Row = { type: "model"; model: CatalogModel };
  * Switching between the models already on disk. Choosing a model is the
  * catalog's job; this page answers the everyday question — which of mine
  * handles the language I'm about to speak — and takes one keystroke to act
- * on it. A fixed Tab action leads to the catalog without posing as a model.
+ * on it. A fixed Tab action leads forward to the catalog without posing as a
+ * model; the shared model-pane language action remains separate.
  */
 export class YourModelsPicker extends Container implements Focusable {
   private readonly search = new Input();
@@ -104,10 +100,12 @@ export class YourModelsPicker extends Container implements Focusable {
     this.search.focused = value && !this.selection.download && !this.ratingsHelp.isOpen;
   }
 
+  private readonly keys: TranscribeKeys;
+
   constructor(
     private readonly tui: TUI,
     private readonly theme: UiTheme,
-    private readonly keybindings: KeybindingsManager,
+    keybindings: KeybindingsManager,
     private readonly preferredLanguages: readonly string[],
     currentModelId: string | undefined,
     private readonly done: (result: YourModelsResult | undefined) => void,
@@ -115,7 +113,8 @@ export class YourModelsPicker extends Container implements Focusable {
     options: YourModelsPickerOptions = {},
   ) {
     super();
-    this.ratingsHelp = new ModelRatingsHelp(tui, theme, keybindings, false);
+    this.keys = new TranscribeKeys(keybindings);
+    this.ratingsHelp = new ModelRatingsHelp(tui, theme, this.keys, false);
     this.selection = new ModelSelectionController<YourModelsResult | undefined>(
       (...args) => this.onActivate(...args),
       {
@@ -168,7 +167,7 @@ export class YourModelsPicker extends Container implements Focusable {
     this.addChild(new Text(theme.fg("accent", theme.bold("Your models")), PANEL_PADDING, 0));
     this.addChild(
       new Text(
-        `${theme.fg("muted", `Languages: ${preferredLanguages.map(displayLanguage).join(", ")}`)} · ${rawKeyHint("shift+tab", "change")}`,
+        `${theme.fg("muted", `Languages: ${preferredLanguages.map(displayLanguage).join(", ")}`)} · ${this.keys.hint("transcribe.languages.change", "change")}`,
         PANEL_PADDING,
         0,
       ),
@@ -188,7 +187,7 @@ export class YourModelsPicker extends Container implements Focusable {
   }
 
   private updateBrowseAction(): void {
-    const label = ` ${keyText("tui.input.tab")}  ${BROWSE_LABEL} `;
+    const label = ` ${this.keys.keyText("transcribe.yourModels.browse")}  ${BROWSE_LABEL} `;
     this.browseAction.setText(
       this.theme.inverse(this.theme.fg("accent", this.theme.bold(label))),
     );
@@ -242,7 +241,7 @@ export class YourModelsPicker extends Container implements Focusable {
     if (this.disposed) return;
     this.body.clear();
     if (this.selection.download) {
-      this.downloadPanel ??= new DownloadPanel(this.tui, this.theme, this.selection.download);
+      this.downloadPanel ??= new DownloadPanel(this.tui, this.theme, this.keys, this.selection.download);
       this.downloadPanel.update(this.selection.download, "");
       this.body.addChild(this.downloadPanel);
       this.tui.requestRender();
@@ -320,7 +319,7 @@ export class YourModelsPicker extends Container implements Focusable {
     const confirmLabel = "choose";
     const closeLabel = this.search.getValue() ? "clear search" : "close";
     this.footer.setText(
-      `${rawKeyHint("↑↓", "navigate")}  ${keyHint("tui.select.confirm", confirmLabel)}  ${keyHint("tui.select.cancel", closeLabel)}  ${rawKeyHint("?", "rating guide")}`,
+      `${this.keys.navHint("navigate")}  ${this.keys.hint("tui.select.confirm", confirmLabel)}  ${this.keys.hint("tui.select.cancel", closeLabel)}  ${this.keys.hint("transcribe.models.ratingsHelp", "rating guide")}`,
     );
     this.tui.requestRender();
   }
@@ -333,47 +332,47 @@ export class YourModelsPicker extends Container implements Focusable {
       return;
     }
     if (this.selection.download) {
-      if (this.keybindings.matches(data, "tui.select.cancel")) {
+      if (this.keys.matches(data, "tui.select.cancel")) {
         this.selection.cancelDownload();
       }
       return;
     }
-    if (isRatingsHelpKey(data)) {
+    if (this.keys.matches(data, "transcribe.models.ratingsHelp")) {
       this.ratingsHelp.open();
       this.focused = this._focused;
       return;
     }
-    if (matchesKey(data, "shift+tab")) {
+    if (this.keys.matches(data, "transcribe.languages.change")) {
       this.selection.requestExit({ type: "change-languages" });
       return;
     }
-    if (this.keybindings.matches(data, "tui.input.tab")) {
+    if (this.keys.matches(data, "transcribe.yourModels.browse")) {
       this.selection.requestExit({ type: "browse" });
       return;
     }
     const rows = this.rows();
-    if (this.keybindings.matches(data, "tui.select.up")) {
+    if (this.keys.matches(data, "tui.select.up")) {
       if (rows.length) {
         this.selectedIndex = (this.selectedIndex + rows.length - 1) % rows.length;
       }
       this.refresh();
       return;
     }
-    if (this.keybindings.matches(data, "tui.select.down")) {
+    if (this.keys.matches(data, "tui.select.down")) {
       if (rows.length) {
         this.selectedIndex = (this.selectedIndex + 1) % rows.length;
       }
       this.refresh();
       return;
     }
-    if (this.keybindings.matches(data, "tui.select.confirm")) {
+    if (this.keys.matches(data, "tui.select.confirm")) {
       const row = rows[this.selectedIndex];
       if (row) {
         this.selection.select(row.model);
       }
       return;
     }
-    if (this.keybindings.matches(data, "tui.select.cancel")) {
+    if (this.keys.matches(data, "tui.select.cancel")) {
       if (this.search.getValue()) {
         this.search.setValue("");
         this.selectedIndex = 0;

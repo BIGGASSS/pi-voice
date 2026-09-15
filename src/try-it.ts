@@ -1,7 +1,6 @@
-import { keyHint, rawKeyHint, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { rawKeyHint, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   type Component,
-  matchesKey,
   Text,
   truncateToWidth,
   type KeybindingsManager,
@@ -11,6 +10,7 @@ import { createMicrophoneCapture, testMicrophonePermission } from "./audio.js";
 import { getCatalogModel } from "./catalog.js";
 import { DictationController, type DictationControllerOptions } from "./dictation-controller.js";
 import { microphoneSummary } from "./microphone-picker.js";
+import { matchesShortcut, TranscribeKeys } from "./keybindings.js";
 import { COMFORTABLE_REAL_TIME_FACTOR } from "./recommendations.js";
 import type { TranscribeSettings } from "./settings.js";
 import { displayShortcut } from "./shortcut-core.js";
@@ -29,6 +29,8 @@ type UiTheme = ExtensionContext["ui"]["theme"];
 type TryItPaneOptions = Pick<DictationControllerOptions, "createCapture" | "now"> & {
   /** Shown only before the first recording attempt when macOS has not asked yet. */
   showMacPermissionNote?: boolean;
+  /** Checked without holding the previous onboarding pane on screen. */
+  microphonePermission?: Promise<Awaited<ReturnType<typeof testMicrophonePermission>>>;
 };
 
 export type TryItResult =
@@ -56,24 +58,30 @@ export function needsFasterModel(speechSeconds: number, transcribeSeconds: numbe
 export class TryItPane implements Component {
   private readonly dictation: DictationController;
   private readonly analyzer = new SpectrumAnalyzer();
-  private readonly preview = new TranscriptPreview();
+  private readonly preview: TranscriptPreview;
+  private readonly keys: TranscribeKeys;
   private nextPaintAt = 0;
   private disposed = false;
   private closed = false;
   private showMacPermissionNote: boolean;
+  private recordingAttempted = false;
+  private modelPreparationScheduled = false;
 
   constructor(
     private readonly tui: TUI,
     private readonly theme: UiTheme,
-    private readonly keybindings: KeybindingsManager,
+    keybindings: KeybindingsManager,
     private readonly settings: TranscribeSettings,
     service: Pick<TranscriptionService, "reserveDictation">,
     private readonly done: (result: TryItResult) => void,
     options: TryItPaneOptions = { createCapture: createMicrophoneCapture },
   ) {
+    this.keys = new TranscribeKeys(keybindings);
+    this.preview = new TranscriptPreview(this.keys);
     this.showMacPermissionNote = options.showMacPermissionNote ?? false;
     this.dictation = new DictationController(service, {
-      ...options,
+      createCapture: options.createCapture,
+      now: options.now,
       onChange: () => this.refresh(),
       onFrame: (frame) => {
         this.analyzer.push(frame);
@@ -83,7 +91,16 @@ export class TryItPane implements Component {
         this.refresh();
       },
     });
-    this.dictation.prepare(settings);
+    void options.microphonePermission?.then(
+      (permission) => {
+        if (this.disposed || this.closed || this.recordingAttempted) return;
+        const show = permission.status === "not-determined";
+        if (show === this.showMacPermissionNote) return;
+        this.showMacPermissionNote = show;
+        this.refresh();
+      },
+      () => undefined,
+    );
   }
 
   private refresh(): void {
@@ -96,6 +113,16 @@ export class TryItPane implements Component {
   }
 
   render(width: number): string[] {
+    // The native backend performs some synchronous first-use initialization.
+    // Start it only after this first render has put Try It on screen, so the
+    // model picker never looks stuck while the next model is being prepared.
+    if (!this.modelPreparationScheduled) {
+      this.modelPreparationScheduled = true;
+      setImmediate(() => {
+        if (!this.closed && !this.disposed) this.dictation.prepare(this.settings);
+      });
+    }
+
     const state = this.dictation.state;
     const shortcut = displayShortcut(this.settings.shortcut);
     const modelName = getCatalogModel(this.settings.model.id)?.name ?? this.settings.model.id;
@@ -111,6 +138,11 @@ export class TryItPane implements Component {
         bands: this.analyzer.bands, elapsedMs: this.dictation.elapsedMs,
         modelState: this.dictation.modelState,
       });
+    } else if (
+      (state.phase === "idle" || state.phase === "ready") &&
+      this.dictation.modelState === "loading"
+    ) {
+      activity = fg("muted", `Loading ${modelName}… You can start recording now.`);
     } else if (state.phase === "transcribing") {
       activity = fg("accent", "Transcribing…");
     } else if (state.phase === "starting") {
@@ -136,17 +168,17 @@ export class TryItPane implements Component {
 
     let hints: string;
     if (state.phase === "listening") {
-      hints = `${rawKeyHint(shortcut, "stop")}  ${keyHint("tui.select.cancel", "discard")}`;
+      hints = `${rawKeyHint(shortcut, "stop")}  ${this.keys.hint("tui.select.cancel", "discard")}`;
     } else if (
       state.phase === "transcribing" ||
       state.phase === "starting" ||
       state.phase === "cancelling"
     ) {
-      hints = keyHint("tui.select.cancel", "cancel");
+      hints = this.keys.hint("tui.select.cancel", "cancel");
     } else if (state.phase === "result") {
-      hints = `${keyHint("tui.select.confirm", "looks good")}  ${keyHint("tui.select.cancel", "done")}  ${rawKeyHint(shortcut, "try again")}`;
+      hints = `${this.keys.hint("tui.select.confirm", "looks good")}  ${this.keys.hint("tui.select.cancel", "done")}  ${rawKeyHint(shortcut, "try again")}`;
     } else {
-      hints = `${rawKeyHint(shortcut, state.phase === "error" ? "try again" : "record")}  ${keyHint("tui.select.cancel", "skip")}`;
+      hints = `${rawKeyHint(shortcut, state.phase === "error" ? "try again" : "record")}  ${this.keys.hint("tui.select.cancel", "skip")}`;
     }
 
     const setting = (label: string, value: string, key: string, compact: boolean) => {
@@ -180,9 +212,9 @@ export class TryItPane implements Component {
       return [
         ...(details ? [...text(details), ...(compact ? [] : [""])] : []),
         ...permission,
-        ...render(setting("Shortcut", shortcut, "s", compact)),
-        ...render(setting("Microphone", microphoneSummary(this.settings.microphone), "m", compact)),
-        ...render(setting("Model", modelName, "c", compact)),
+        ...render(setting("Shortcut", shortcut, this.keys.keyText("transcribe.tryIt.shortcut"), compact)),
+        ...render(setting("Microphone", microphoneSummary(this.settings.microphone), this.keys.keyText("transcribe.tryIt.microphone"), compact)),
+        ...render(setting("Model", modelName, this.keys.keyText("transcribe.tryIt.model"), compact)),
         ...(compact ? [] : [""]),
         ...text(hints),
         ...(compact ? [] : [""]),
@@ -217,6 +249,7 @@ export class TryItPane implements Component {
   }
 
   private start(): void {
+    this.recordingAttempted = true;
     this.showMacPermissionNote = false;
     this.preview.setText("");
     this.analyzer.reset();
@@ -233,7 +266,7 @@ export class TryItPane implements Component {
   handleInput(data: string): void {
     if (this.closed || this.disposed) return;
     const phase = this.dictation.state.phase;
-    if (matchesKey(data, this.settings.shortcut as Parameters<typeof matchesKey>[1])) {
+    if (matchesShortcut(data, this.settings.shortcut)) {
       if (phase === "listening") {
         void this.dictation.stop();
       } else if (["idle", "ready", "result", "error"].includes(phase)) {
@@ -241,7 +274,7 @@ export class TryItPane implements Component {
       }
       return;
     }
-    if (this.keybindings.matches(data, "tui.select.cancel")) {
+    if (this.keys.matches(data, "tui.select.cancel")) {
       if (["starting", "listening", "transcribing", "cancelling"].includes(phase)) {
         void this.dictation.cancel();
       } else {
@@ -250,19 +283,19 @@ export class TryItPane implements Component {
       return;
     }
     if (!["idle", "ready", "result", "error"].includes(phase)) return;
-    if ((phase === "result" || phase === "error") && this.preview.handleInput(data, this.keybindings)) {
+    if ((phase === "result" || phase === "error") && this.preview.handleInput(data)) {
       this.refresh();
       return;
     }
-    if (this.keybindings.matches(data, "tui.select.confirm")) {
+    if (this.keys.matches(data, "tui.select.confirm")) {
       if (phase === "result") this.leave({ action: "done" });
       return;
     }
-    if (data.toLowerCase() === "m") {
+    if (this.keys.matches(data, "transcribe.tryIt.microphone")) {
       this.leave({ action: "microphone" });
-    } else if (data.toLowerCase() === "s") {
+    } else if (this.keys.matches(data, "transcribe.tryIt.shortcut")) {
       this.leave({ action: "shortcut" });
-    } else if (data.toLowerCase() === "c") {
+    } else if (this.keys.matches(data, "transcribe.tryIt.model")) {
       this.leave({ action: "model" });
     }
   }
@@ -274,14 +307,17 @@ export class TryItPane implements Component {
 }
 
 export async function tryVoice(ctx: ExtensionContext, settings: TranscribeSettings): Promise<TryItResult | undefined> {
-  const permission = await testMicrophonePermission();
+  // This can take up to its subprocess timeout on macOS. Let it finish after
+  // the Try It pane has replaced the model picker instead of blocking between
+  // the two panes.
+  const microphonePermission = testMicrophonePermission();
   const service = new TranscriptionService();
   let pane: TryItPane | undefined;
   try {
     return await ctx.ui.custom<TryItResult>((tui, theme, keybindings, done) =>
       (pane = new TryItPane(tui, theme, keybindings, settings, service, done, {
         createCapture: createMicrophoneCapture,
-        showMacPermissionNote: permission.status === "not-determined",
+        microphonePermission,
       })),
     );
   } finally {

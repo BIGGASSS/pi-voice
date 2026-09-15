@@ -130,6 +130,23 @@ export function clearTranscribeWidget(ctx: ExtensionContext): void {
   ctx.ui.setWidget(WIDGET_KEY, undefined);
 }
 
+/**
+ * Ready line shown when setup finishes: a green check, then the body in the
+ * terminal's default foreground so it matches what the user types, with the
+ * details dim. The caller decides how long it stays.
+ */
+export function showReadyStatus(
+  ctx: ExtensionContext,
+  options: { talk: string; summary: string },
+): void {
+  if (!ctx.hasUI) return;
+  const theme = ctx.ui.theme;
+  ctx.ui.setWidget(WIDGET_KEY, [
+    `${theme.fg("success", "✓")} pi-transcribe ready · ${options.talk}`,
+    theme.fg("dim", options.summary),
+  ]);
+}
+
 export type MeterModelState = "loading" | "ready" | "failed";
 
 /** Peak-hold band levels computed from capture frames. */
