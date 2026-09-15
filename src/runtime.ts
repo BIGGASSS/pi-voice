@@ -347,7 +347,6 @@ export function createPiTranscribeRuntime(
       meter.setModelState(controller.modelState);
       recording = { dictation: controller, meter };
       listenForCancel(ctx);
-      ctx.ui.notify("Microphone recording started", "info");
     } catch (error) {
       recording = undefined;
       meter.stop();
