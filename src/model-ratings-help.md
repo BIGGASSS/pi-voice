@@ -25,7 +25,7 @@ Your machine may be faster or slower at transcribing depending on your system co
 
 ## Other symbols
 
-- **●** — Your selected model
+- **✓** — Your selected model
 - **—** — The model doesn't support this language
 - **?** — The model supports this language, but we don't have a accuracy grade for it
 - **manual lang** — The model requires you to pick the language you want to transcribe

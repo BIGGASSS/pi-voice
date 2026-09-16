@@ -1,24 +1,17 @@
 import { readFileSync } from "node:fs";
-import { rawKeyHint, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
-  decodeKittyPrintable,
   Markdown,
-  matchesKey,
   truncateToWidth,
   visibleWidth,
   type Component,
-  type KeybindingsManager,
   type TUI,
 } from "@earendil-works/pi-tui";
 import { gradeStyle } from "./model-cells.js";
+import type { TranscribeKeys } from "./keybindings.js";
 import { PANEL_PADDING, panelBorder, paneRowBudget } from "./ui-components.js";
 
 type UiTheme = ExtensionContext["ui"]["theme"];
-
-/** Match the typed character, including Kitty's explicit shifted key report. */
-export function isRatingsHelpKey(data: string): boolean {
-  return matchesKey(data, "?") || decodeKittyPrintable(data) === "?";
-}
 
 /**
  * An in-place help view owned by the picker. The picker stays mounted and routes
@@ -35,7 +28,7 @@ export class ModelRatingsHelp implements Component {
   constructor(
     private readonly tui: TUI,
     private readonly theme: UiTheme,
-    private readonly keys: KeybindingsManager,
+    private readonly keys: TranscribeKeys,
     private readonly catalog: boolean,
   ) {}
 
@@ -108,17 +101,17 @@ export class ModelRatingsHelp implements Component {
     const page = lines.slice(this.offset, this.offset + this.pageSize);
 
     const scrollable = lines.length > this.pageSize;
-    const scroll = scrollable ? `${rawKeyHint("↑↓", "scroll")}  ` : "";
+    const scroll = scrollable ? `${this.keys.navHint("scroll")}  ` : "";
     const more = [this.offset > 0 ? "↑ above" : "", this.offset + this.pageSize < lines.length ? "↓ more" : ""]
       .filter(Boolean).join(" · ");
-    const firstBackKey = this.keys.getKeys("tui.select.cancel")[0] ?? "unbound";
-    const back = rawKeyHint(`q/${firstBackKey}`, "back to models");
+    const backKeys = ["transcribe.ratingsHelp.close", "tui.select.cancel"] as const;
+    const back = this.keys.hint(backKeys, "back to models");
     const hints = [
       `${scroll}${more ? `${this.theme.fg("dim", more)}  ` : ""}${back}`,
       `${scroll}${back}`,
       back,
-      rawKeyHint(`q/${firstBackKey}`, "back"),
-      rawKeyHint("q", "back"),
+      this.keys.hint(backKeys, "back"),
+      this.keys.hint("transcribe.ratingsHelp.close", "back"),
     ];
     const footer = hints.find((hint) => visibleWidth(hint) <= width - PANEL_PADDING * 2) ?? hints[hints.length - 1]!;
     return [
@@ -134,8 +127,7 @@ export class ModelRatingsHelp implements Component {
   handleInput(data: string): void {
     if (
       this.keys.matches(data, "tui.select.cancel") ||
-      matchesKey(data, "q") ||
-      decodeKittyPrintable(data) === "q"
+      this.keys.matches(data, "transcribe.ratingsHelp.close")
     ) {
       this.close();
       return;
@@ -145,8 +137,8 @@ export class ModelRatingsHelp implements Component {
     // Keep a little context across pages, particularly section headings.
     else if (this.keys.matches(data, "tui.select.pageUp")) this.offset -= Math.max(1, this.pageSize - 2);
     else if (this.keys.matches(data, "tui.select.pageDown")) this.offset += Math.max(1, this.pageSize - 2);
-    else if (matchesKey(data, "home")) this.offset = 0;
-    else if (matchesKey(data, "end")) this.offset = this.lineCount - this.pageSize;
+    else if (this.keys.matches(data, "transcribe.scroll.top")) this.offset = 0;
+    else if (this.keys.matches(data, "transcribe.scroll.bottom")) this.offset = this.lineCount - this.pageSize;
     else return; // In particular, Enter and typing never reach the model list.
     this.offset = Math.max(0, Math.min(this.offset, this.lineCount - this.pageSize));
     this.tui.requestRender();

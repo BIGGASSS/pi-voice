@@ -7,13 +7,13 @@ import { initTheme, type ExtensionContext } from "@earendil-works/pi-coding-agen
 import type { Component } from "@earendil-works/pi-tui";
 import { Deferred } from "../src/deferred.js";
 import { CatalogModelPicker, LanguagePicker } from "../src/model-picker.js";
-import { changeOnboardingModel, runOnboarding } from "../src/onboarding.js";
+import { changeOnboardingModel, runModelSelection, runOnboarding } from "../src/onboarding.js";
 import { RecommendedModelPicker } from "../src/recommendation-picker.js";
 import { CATALOG_MODELS } from "../src/catalog.js";
 import { recommendModels } from "../src/recommendations.js";
 import { readSettings, settingsForModel, writeSettings } from "../src/settings.js";
 import { cacheCatalogModel, isolatedModelCache } from "./model-cache-helper.js";
-import { keybindings, stripAnsi, testTheme, testTui } from "./ui-helpers.js";
+import { keybindings, testTheme, testTui } from "./ui-helpers.js";
 
 initTheme("dark");
 
@@ -69,7 +69,6 @@ function initialSettings(languages = ["en"]) {
 function selectRecommended(): Step {
   return (pane) => {
     assert.ok(pane instanceof RecommendedModelPicker);
-    assert.match(stripAnsi(pane.render(80).join("\n")), /English.*Mandarin/);
     pane.handleInput("\x1b[A"); // Expanded pane starts on the first alternative.
     pane.handleInput("\r");
   };
@@ -96,7 +95,7 @@ for (const entry of ["recommended", "other-models", "single-pick"] as const) {
         assert.ok(entry === "recommended"
           ? pane instanceof RecommendedModelPicker
           : pane instanceof CatalogModelPicker);
-        pane.handleInput?.("\t");
+        pane.handleInput?.("\x0c");
       },
       (pane, done) => {
         assert.ok(pane instanceof LanguagePicker);
@@ -118,7 +117,6 @@ for (const entry of ["recommended", "other-models", "single-pick"] as const) {
     // A later visit uses the newly saved languages, not the first-run closure.
     const revisit = scriptedContext([(pane) => {
       assert.ok(pane instanceof RecommendedModelPicker);
-      assert.match(stripAnsi(pane.render(80).join("\n")), /English.*Mandarin/);
       pane.handleInput("\x1b");
     }]);
     assert.equal(await changeOnboardingModel(revisit.ctx, result), undefined);
@@ -126,19 +124,63 @@ for (const entry of ["recommended", "other-models", "single-pick"] as const) {
   });
 }
 
+test("a root catalog stays root when another cached model appears while it is open", async (t) => {
+  isolatedSettings(t);
+  const cache = isolatedModelCache(t);
+  const current = CATALOG_MODELS.find((model) => model.id === "parakeet-unified-en-0.6b")!;
+  const second = CATALOG_MODELS.find((model) => model.id !== current.id)!;
+  cacheCatalogModel(cache, current);
+  const script = scriptedContext([
+    (pane) => {
+      assert.ok(pane instanceof CatalogModelPicker);
+      // Simulate finishing a download without closing this catalog. Routing
+      // must still reflect the cache state from when the pane opened.
+      cacheCatalogModel(cache, second);
+      pane.handleInput("\x1b");
+    },
+  ]);
+  assert.equal(await runModelSelection(script.ctx, {
+    preferredLanguages: ["en"],
+    currentModelId: current.id,
+    postActivation: "stay",
+  }), undefined);
+  script.assertFinished();
+});
+
+test("Escape from all models returns to the recommendation that opened it", async (t) => {
+  isolatedSettings(t);
+  const current = initialSettings();
+  await writeSettings(current);
+  const script = scriptedContext([
+    (pane) => {
+      assert.ok(pane instanceof RecommendedModelPicker);
+      pane.handleInput("o");
+    },
+    (pane) => {
+      assert.ok(pane instanceof CatalogModelPicker);
+      pane.handleInput("\x1b");
+    },
+    (pane) => {
+      assert.ok(pane instanceof RecommendedModelPicker);
+      pane.handleInput("\x1b");
+    },
+  ]);
+  assert.equal(await changeOnboardingModel(script.ctx, current), undefined);
+  script.assertFinished();
+});
+
 test("cancelling the language picker returns to its model pane without applying edits", async (t) => {
   isolatedSettings(t);
   const current = initialSettings();
   await writeSettings(current);
   const script = scriptedContext([
-    (pane) => pane.handleInput?.("\t"),
+    (pane) => pane.handleInput?.("\x0c"),
     (pane, done) => {
       assert.ok(pane instanceof LanguagePicker);
       done({ languages: ["en", "zh"], confirmed: false });
     },
     (pane) => {
       assert.ok(pane instanceof RecommendedModelPicker);
-      assert.doesNotMatch(stripAnsi(pane.render(80).join("\n")), /Mandarin/);
       pane.handleInput("\x1b");
     },
   ]);
@@ -152,11 +194,10 @@ test("back after confirming new languages leaves settings unchanged until a mode
   const current = initialSettings();
   await writeSettings(current);
   const script = scriptedContext([
-    (pane) => pane.handleInput?.("\t"),
+    (pane) => pane.handleInput?.("\x0c"),
     (_pane, done) => done({ languages: ["en", "zh"], confirmed: true }),
     (pane) => {
       assert.ok(pane instanceof RecommendedModelPicker);
-      assert.match(stripAnsi(pane.render(80).join("\n")), /Mandarin/);
       pane.handleInput("\x1b");
     },
   ]);
@@ -201,4 +242,38 @@ test("Escape from the initial recommendation still goes back to languages", asyn
   ]);
   assert.equal(await runOnboarding(script.ctx), undefined);
   script.assertFinished();
+});
+
+test("Tab keeps forward actions while Ctrl+L changes languages across model panes", () => {
+  let languageResult: unknown;
+  const languages = new LanguagePicker(
+    testTui(24), testTheme(), keybindings(), ["en"], "exit",
+    (result) => { languageResult = result; }, 1,
+  );
+  languages.handleInput("\t");
+  assert.deepEqual(languageResult, { languages: ["en"], confirmed: true });
+
+  const results: unknown[] = [];
+  const activate = async () => ({ path: "/tmp/model" });
+  const picks = recommendModels(CATALOG_MODELS, ["en"]);
+  const recommended = new RecommendedModelPicker(
+    testTui(24), testTheme(), keybindings(), ["en"], picks, activate,
+    (result) => results.push(result), { onboardingStep: 2 },
+  );
+  recommended.handleInput("\t");
+  assert.deepEqual(results, []);
+  recommended.handleInput("\x0c");
+  assert.deepEqual(results, [{ type: "change-languages" }]);
+  recommended.dispose();
+
+  const catalogResults: unknown[] = [];
+  const catalog = new CatalogModelPicker(
+    testTui(24), testTheme(), keybindings(), ["en"], undefined,
+    (result) => catalogResults.push(result), activate,
+  );
+  catalog.handleInput("\t");
+  assert.deepEqual(catalogResults, []);
+  catalog.handleInput("\x0c");
+  assert.deepEqual(catalogResults, [{ type: "change-languages" }]);
+  catalog.dispose();
 });

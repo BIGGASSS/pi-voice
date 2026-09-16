@@ -1,8 +1,4 @@
-import {
-  keyHint,
-  rawKeyHint,
-  type ExtensionContext,
-} from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   Container,
   type Focusable,
@@ -18,9 +14,11 @@ import {
 } from "./catalog.js";
 import type { CatalogModelActivation } from "./model-activation.js";
 import { ModelSelectionController } from "./model-selection-controller.js";
+import { TranscribeKeys } from "./keybindings.js";
 import {
   DownloadPanel,
   LIST_PADDING,
+  onboardingHeader,
   PANEL_PADDING,
   padToWidth,
   panelBorder,
@@ -42,6 +40,10 @@ export type RecommendedModelResult =
 export type RecommendedModelPickerOptions = {
   /** Start with the alternatives unfolded. */
   expanded?: boolean;
+  /** Defaults to a model-selection heading. */
+  title?: string;
+  /** Adds setup context and progress to the heading. */
+  onboardingStep?: number;
 };
 
 /** Whether the recommendation pane has a distinct, supported trade-off to show. */
@@ -72,6 +74,8 @@ export class RecommendedModelPicker extends Container implements Focusable {
   private expanded = false;
   private selectedIndex = 0;
   private readonly selection: ModelSelectionController<RecommendedModelResult | undefined>;
+  private readonly title: string;
+  private readonly onboardingStep: number | undefined;
   private downloadPanel: DownloadPanel | undefined;
   private disposed = false;
   private _focused = false;
@@ -84,10 +88,12 @@ export class RecommendedModelPicker extends Container implements Focusable {
     this._focused = value;
   }
 
+  private readonly keys: TranscribeKeys;
+
   constructor(
     private readonly tui: TUI,
     private readonly theme: UiTheme,
-    private readonly keybindings: KeybindingsManager,
+    keybindings: KeybindingsManager,
     private readonly languages: readonly string[],
     recommendations: readonly ModelRecommendation[],
     private readonly activate: CatalogModelActivation,
@@ -95,6 +101,9 @@ export class RecommendedModelPicker extends Container implements Focusable {
     options: RecommendedModelPickerOptions = {},
   ) {
     super();
+    this.keys = new TranscribeKeys(keybindings);
+    this.title = options.title ?? "Choose a model";
+    this.onboardingStep = options.onboardingStep;
     this.selection = new ModelSelectionController<RecommendedModelResult | undefined>(
       (...args) => this.activate(...args),
       {
@@ -124,11 +133,13 @@ export class RecommendedModelPicker extends Container implements Focusable {
     this.addChild(panelBorder(theme));
     this.addChild(new Spacer(1));
     this.addChild(
-      new Text(theme.fg("accent", theme.bold("Set up pi-transcribe · 2 of 3")), PANEL_PADDING, 0),
+      options.onboardingStep
+        ? onboardingHeader(theme, this.title, options.onboardingStep)
+        : new Text(theme.fg("accent", theme.bold(this.title)), PANEL_PADDING, 0),
     );
     this.addChild(
       new Text(
-        `${theme.fg("muted", `Languages: ${languages.map(displayLanguage).join(", ")}`)} · ${keyHint("tui.input.tab", "change")}`,
+        `${theme.fg("muted", `Your languages: ${languages.map(displayLanguage).join(", ")}`)} · ${this.keys.hint("transcribe.languages.change", "change")}`,
         PANEL_PADDING,
         0,
       ),
@@ -275,7 +286,7 @@ export class RecommendedModelPicker extends Container implements Focusable {
       this.downloadPanel = undefined;
     }
     if (this.selection.download) {
-      this.downloadPanel ??= new DownloadPanel(this.tui, this.theme, this.selection.download);
+      this.downloadPanel ??= new DownloadPanel(this.tui, this.theme, this.keys, this.selection.download);
       this.downloadPanel.update(this.selection.download);
       this.body.addChild(this.downloadPanel);
       this.tui.requestRender();
@@ -323,7 +334,7 @@ export class RecommendedModelPicker extends Container implements Focusable {
     this.body.addChild(new Spacer(1));
     this.body.addChild(
       new Text(
-        `${keyHint("tui.select.confirm", this.confirmLabel())}  ${rawKeyHint("o", "all models")}  ${keyHint("tui.select.cancel", "back")}`,
+        `${this.keys.hint("tui.select.confirm", this.confirmLabel())}  ${this.keys.hint("transcribe.recommendations.browseAll", "all models")}  ${this.keys.hint("tui.select.cancel", "back")}`,
         PANEL_PADDING,
         0,
       ),
@@ -385,14 +396,16 @@ export class RecommendedModelPicker extends Container implements Focusable {
     if (lines.length <= budget) return lines;
     const line = (value: string) => truncateToWidth(` ${value}`, width);
     const text = (value: string) => new Text(value, PANEL_PADDING, 0).render(width);
-    const title = line(this.theme.fg("accent", "Set up pi-transcribe · 2 of 3"));
+    const title = this.onboardingStep
+      ? onboardingHeader(this.theme, this.title, this.onboardingStep).render(width)[0]!
+      : line(this.theme.fg("accent", this.title));
     if (this.downloadPanel) {
       return budget === 1 ? this.downloadPanel.render(width, 1)
         : [title, ...this.downloadPanel.render(width, budget - 1)];
     }
     // Collapse whitespace and descriptions before hiding any choices. On tiny
     // terminals window the choices around the cursor, keeping the actions visible.
-    const footer = text(`${keyHint("tui.select.confirm", this.confirmLabel())}  ${keyHint("tui.select.cancel", "back")}\n${keyHint("tui.input.tab", "languages")}  ${rawKeyHint("o", "all models")}`)
+    const footer = text(`${this.keys.hint("tui.select.confirm", this.confirmLabel())}  ${this.keys.hint("tui.select.cancel", "back")}\n${this.keys.hint("transcribe.languages.change", "languages")}  ${this.keys.hint("transcribe.recommendations.browseAll", "all models")}`)
       .slice(0, Math.max(0, budget - 1));
     const header = [title, line(this.heading())].slice(0, Math.max(0, budget - footer.length - 1));
     const rows = this.rows();
@@ -421,35 +434,37 @@ export class RecommendedModelPicker extends Container implements Focusable {
   handleInput(data: string): void {
     if (!this.selection.acceptsInput) return;
     if (this.selection.download) {
-      if (this.keybindings.matches(data, "tui.select.cancel")) {
+      if (this.keys.matches(data, "tui.select.cancel")) {
         this.selection.cancelDownload();
       }
       return;
     }
-    if (this.keybindings.matches(data, "tui.input.tab")) {
+    // Tab policy: see TRANSCRIBE_KEYBINDINGS. Activation stays an explicit Enter.
+    if (this.keys.matches(data, "transcribe.languages.continue")) return;
+    if (this.keys.matches(data, "transcribe.languages.change")) {
       this.selection.requestExit({ type: "change-languages" });
       return;
     }
-    if (this.keybindings.matches(data, "tui.select.cancel")) {
+    if (this.keys.matches(data, "tui.select.cancel")) {
       this.selection.requestExit({ type: "back" });
       return;
     }
     const count = this.rows().length;
-    if (this.keybindings.matches(data, "tui.select.up") && count > 1) {
+    if (this.keys.matches(data, "tui.select.up") && count > 1) {
       this.selectedIndex = (this.selectedIndex - 1 + count) % count;
       this.refresh();
       return;
     }
-    if (this.keybindings.matches(data, "tui.select.down") && count > 1) {
+    if (this.keys.matches(data, "tui.select.down") && count > 1) {
       this.selectedIndex = (this.selectedIndex + 1) % count;
       this.refresh();
       return;
     }
-    if (data.toLowerCase() === "o") {
+    if (this.keys.matches(data, "transcribe.recommendations.browseAll")) {
       this.selection.requestExit({ type: "other-models" });
       return;
     }
-    if (this.keybindings.matches(data, "tui.select.confirm")) {
+    if (this.keys.matches(data, "tui.select.confirm")) {
       const row = this.rows()[this.selectedIndex];
       if (!row) return;
       if (row.type === "browse") {

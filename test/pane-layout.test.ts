@@ -9,11 +9,11 @@ import {
   LanguagePicker,
 } from "../src/model-picker.js";
 import { ModelRatingsHelp } from "../src/model-ratings-help.js";
+import { TranscribeKeys } from "../src/keybindings.js";
 import { RecommendedModelPicker } from "../src/recommendation-picker.js";
 import type { TranscribeSettings } from "../src/settings.js";
 import { TryItPane } from "../src/try-it.js";
 import { SingleSelectPicker } from "../src/ui-components.js";
-import { YourModelsPicker } from "../src/your-models-picker.js";
 import { isolatedModelCache } from "./model-cache-helper.js";
 import { keybindings, testTheme, testTui } from "./ui-helpers.js";
 
@@ -66,9 +66,6 @@ test("editor-mounted panes respect the shared 80x24 row and width budget", async
     ["catalog models", () => new CatalogModelPicker(
       makeTui(), testTheme(), keybindings(), ["en"], undefined, () => {}, pendingActivation,
     )],
-    ["your models", () => new YourModelsPicker(
-      makeTui(), testTheme(), keybindings(), ["en"], undefined, () => {}, pendingActivation,
-    )],
     ["recommendations", () => new RecommendedModelPicker(
       makeTui(),
       testTheme(),
@@ -103,7 +100,7 @@ test("editor-mounted panes respect the shared 80x24 row and width budget", async
       makeTui(), testTheme(), keybindings(), settings, pendingService as never, () => {},
     )],
     ["ratings help", () => {
-      const help = new ModelRatingsHelp(makeTui(), testTheme(), keybindings(), true);
+      const help = new ModelRatingsHelp(makeTui(), testTheme(), new TranscribeKeys(keybindings()), true);
       help.open();
       return help;
     }],

@@ -16,7 +16,7 @@ import {
   type AccuracyLetter,
   type RecommendationRole,
 } from "./recommendations.js";
-import { LIST_PADDING, padToWidth } from "./ui-components.js";
+import { LIST_PADDING, padToWidth, selectionMarker } from "./ui-components.js";
 
 type UiTheme = ExtensionContext["ui"]["theme"];
 
@@ -29,6 +29,8 @@ export const ROLE_LABELS: Record<RecommendationRole, string> = {
   accurate: "Accurate",
 };
 export const MANUAL_LANGUAGE_TAG = "manual lang";
+/** Replaces the size column for a model already in the cache. */
+export const ON_DISK_LABEL = "on disk";
 // "Best · Fast" is the widest role pairing that occurs.
 export const TAG_WIDTH = 11;
 
@@ -95,7 +97,11 @@ export function speedCell(model: CatalogModel): string {
 
 export type ModelTableLayout = {
   nameWidth: number;
-  header: string;
+  /**
+   * A section heading that doubles as the column header row: the label sits
+   * over the name column, the column names over theirs.
+   */
+  header: (label: string) => string;
   sizeWidth?: number;
 };
 
@@ -123,13 +129,20 @@ export function modelTableLayout(
     maximumNameWidth,
     Math.max(MIN_MODEL_NAME_WIDTH, width - overhead),
   );
+  // Labels outdent two columns from the names, like a heading; the rest of
+  // the name column is theirs, and a long one truncates on narrow terminals.
+  const labelWidth = 2 + nameWidth;
+  const size = sizeWidth === undefined
+    ? ""
+    : `  ${theme.fg("dim", "Size".padStart(sizeWidth))}`;
   return {
     nameWidth,
     sizeWidth,
-    header:
-      `${" ".repeat(4 + nameWidth)}  ` +
+    header: (label) =>
+      `  ${theme.fg("muted", padToWidth(label, labelWidth))}  ` +
       `${theme.fg("dim", padToWidth("Speed", SPEED_METER_STEPS))}  ` +
-      theme.fg("dim", gradeHeader(languages)),
+      theme.fg("dim", gradeHeader(languages)) +
+      size,
   };
 }
 
@@ -139,15 +152,22 @@ export function modelTableRow(
   model: CatalogModel,
   languages: readonly string[],
   layout: ModelTableLayout,
-  options: { active: boolean; current: boolean; tag?: string },
+  options: {
+    active: boolean;
+    current: boolean;
+    tag?: string;
+    /** Already in the cache: the size column says so instead of the size. */
+    downloaded?: boolean;
+  },
 ): string {
   const prefix = options.active ? theme.fg("accent", "→ ") : "  ";
-  const current = options.current ? theme.fg("accent", "●") : " ";
+  const current = selectionMarker(theme, options.current);
   const nameText = padToWidth(model.name, layout.nameWidth);
   const name = options.active ? theme.fg("accent", nameText) : nameText;
+  const sizeText = options.downloaded ? ON_DISK_LABEL : formatBinarySize(model.size);
   const size = layout.sizeWidth === undefined
     ? ""
-    : `  ${theme.fg("dim", formatBinarySize(model.size).padStart(layout.sizeWidth))}`;
+    : `  ${theme.fg("dim", sizeText.padStart(layout.sizeWidth))}`;
   return (
     `${prefix}${current} ${name}  ${speedCell(model)}  ` +
     `${gradeCells(theme, model, languages)}${size}  ${options.tag ?? ""}`

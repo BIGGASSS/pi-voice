@@ -6,7 +6,6 @@ import {
   type CatalogModelPostActivation,
 } from "./model-picker.js";
 import { createModelActivation } from "./model-activation.js";
-import { chooseYourModel, downloadedCatalogModels } from "./your-models-picker.js";
 import { testMicrophonePermission } from "./audio.js";
 import { chooseMicrophone, microphonesEqual } from "./microphone-picker.js";
 import {
@@ -85,35 +84,20 @@ export async function runModelSelection(
     },
   );
 
-  // Switching between the models already on disk is the everyday case and
-  // gets the first page; the catalog is one row further. A single downloaded
-  // model is nothing to switch between, so the catalog opens directly.
-  const switching = () => downloadedCatalogModels().length >= 2;
-  let page: "yours" | "browse" = switching() ? "yours" : "browse";
+  // One pane switches between the models on disk and downloads new ones.
   while (true) {
-    const paneOptions = {
+    const selection = await chooseCatalogModel(ctx, preferredLanguages, currentModelId, {
       postActivation: options.postActivation,
       // Keep the post-selection state when the picker reopens after a
       // round-trip through the language step.
       activatedInFlow: configured !== undefined,
       onActivate: activate,
-    };
-    const selection = page === "yours"
-      ? await chooseYourModel(ctx, preferredLanguages, currentModelId, paneOptions)
-      : await chooseCatalogModel(ctx, preferredLanguages, currentModelId, paneOptions);
+      cancelLabel: "close",
+    });
     // The picker can close while its last commit is still in flight; wait so
     // configured reflects every selection that will land on disk.
     await waitForCommits();
 
-    if (selection?.type === "browse") {
-      page = "browse";
-      continue;
-    }
-    if (!selection && page === "browse" && switching()) {
-      // Esc from the catalog steps back to the downloaded models.
-      page = "yours";
-      continue;
-    }
     if (!selection || selection.type === "complete") return configured;
 
     // Esc and Continue both keep the selection here; the picker edits live
@@ -208,9 +192,11 @@ export async function changeOnboardingModel(
 ): Promise<TranscribeSettings | undefined> {
   let languages = [...current.preferredLanguages];
   let picks = recommendModels(CATALOG_MODELS, languages);
-  let pane: "recommended" | "browse" = hasRecommendedAlternatives(picks)
-    ? "recommended"
-    : "browse";
+  // With nothing to recommend besides the current model, the catalog is the
+  // whole flow. Otherwise the recommendation pane fronts it, and Esc from
+  // the catalog returns there rather than to Try it.
+  let recommending = hasRecommendedAlternatives(picks);
+  let pane: "recommended" | "browse" = recommending ? "recommended" : "browse";
   let chosen: TranscribeSettings | undefined;
   const activation = createSettingsActivation(
     () => ({
@@ -227,13 +213,22 @@ export async function changeOnboardingModel(
   while (true) {
     const result = pane === "recommended"
       ? await chooseRecommendedModel(ctx, languages, picks, activation.activate, {
+          title: "Change model",
           expanded: true,
+          onboardingStep: 3,
         })
       : await chooseCatalogModel(ctx, languages, chosen?.model.id ?? current.model.id, {
           postActivation: "advance",
           onActivate: activation.activate,
+          cancelLabel: "back",
+          onboardingStep: 3,
+          title: "Browse all models",
         });
     await activation.waitForCommits();
+    if (!result && pane === "browse" && recommending) {
+      pane = "recommended";
+      continue;
+    }
     if (!result || result.type === "complete" || result.type === "back") return chosen;
     if (result.type === "other-models") {
       pane = "browse";
@@ -242,7 +237,7 @@ export async function changeOnboardingModel(
 
     const changed = await chooseLanguages(ctx, languages, {
       cancelLabel: "back",
-      onboarding: true,
+      onboardingStep: 3,
     });
     if (!changed?.confirmed) continue;
     // Language edits remain a draft until a model is selected. Esc back to
@@ -250,6 +245,7 @@ export async function changeOnboardingModel(
     languages = changed.languages;
     picks = recommendModels(CATALOG_MODELS, languages);
     // Even a single pick deserves its recommendation after languages change.
+    recommending = true;
     pane = "recommended";
   }
 }
@@ -267,7 +263,7 @@ export async function runOnboarding(
   while (true) {
     const chosen = await chooseLanguages(ctx, languages, {
       cancelLabel: "exit",
-      onboarding: true,
+      onboardingStep: 1,
     });
     if (!chosen?.confirmed) return configured;
     languages = chosen.languages;
@@ -288,6 +284,7 @@ export async function runOnboarding(
         languages,
         picks,
         activate,
+        { onboardingStep: 2 },
       );
       await waitForCommits();
       if (!recommendation) return configured;
@@ -302,6 +299,9 @@ export async function runOnboarding(
       const selection = await chooseCatalogModel(ctx, languages, configured?.model.id, {
         postActivation: "advance",
         onActivate: activate,
+        cancelLabel: "back",
+        onboardingStep: 2,
+        title: "Browse all models",
       });
       await waitForCommits();
       if (selection?.type === "complete" && configured) {

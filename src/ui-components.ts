@@ -1,11 +1,7 @@
-import {
-  DynamicBorder,
-  keyHint,
-  rawKeyHint,
-  type ExtensionContext,
-} from "@earendil-works/pi-coding-agent";
+import { DynamicBorder, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   Box,
+  type Component,
   Container,
   type Focusable,
   fuzzyFilter,
@@ -20,6 +16,7 @@ import {
 } from "@earendil-works/pi-tui";
 import { formatBinarySize } from "./catalog.js";
 import type { DownloadState } from "./model-selection-controller.js";
+import { TranscribeKeys } from "./keybindings.js";
 
 type UiTheme = ExtensionContext["ui"]["theme"];
 
@@ -33,6 +30,35 @@ export function panelBorder(theme: UiTheme): DynamicBorder {
 /** The rule Pi's editor draws above and below its text. */
 export function editorBorder(theme: UiTheme): DynamicBorder {
   return new DynamicBorder((text: string) => theme.fg("borderMuted", text));
+}
+
+/** Page title on the left; quieter setup context and progress on the right. */
+export function onboardingHeader(
+  theme: UiTheme,
+  title: string,
+  step: number,
+  total = 3,
+): Component {
+  const context = `pi-transcribe setup · ${step} of ${total}`;
+  const compactContext = `${step} of ${total}`;
+  return {
+    invalidate() {},
+    render(width: number): string[] {
+      const innerWidth = Math.max(1, width - PANEL_PADDING * 2);
+      const titleWidth = visibleWidth(title);
+      const contextWidth = visibleWidth(context);
+      const left = theme.fg("accent", theme.bold(title));
+      let content: string;
+      if (titleWidth + contextWidth + 2 <= innerWidth) {
+        content = `${left}${" ".repeat(innerWidth - titleWidth - contextWidth)}${theme.fg("dim", context)}`;
+      } else {
+        const suffix = ` · ${compactContext}`;
+        const titleRoom = Math.max(1, innerWidth - visibleWidth(suffix));
+        content = `${truncateToWidth(left, titleRoom, "…")}${theme.fg("dim", suffix)}`;
+      }
+      return [truncateToWidth(`${" ".repeat(PANEL_PADDING)}${content}`, width, "")];
+    },
+  };
 }
 
 export type SingleSelectChoice<T extends string> = {
@@ -95,13 +121,23 @@ export function padToWidth(value: string, width: number): string {
   return `${truncated}${" ".repeat(Math.max(0, width - visibleWidth(truncated)))}`;
 }
 
+/** Shared fixed-width marker: the arrow is focus, while ✓ is selected/current. */
+export function selectionMarker(theme: UiTheme, selected: boolean): string {
+  return selected ? theme.fg("accent", "✓") : " ";
+}
+
 /** Shared download presentation; the picker owns and disposes its spinner. */
 export class DownloadPanel {
   private readonly spinner: Loader;
   private state: DownloadState;
   private stats: string | undefined;
 
-  constructor(tui: TUI, private readonly theme: UiTheme, state: DownloadState) {
+  constructor(
+    tui: TUI,
+    private readonly theme: UiTheme,
+    private readonly keys: TranscribeKeys,
+    state: DownloadState,
+  ) {
     this.state = state;
     this.spinner = new Loader(tui, (text) => theme.fg("accent", text), (text) => theme.fg("muted", text), state.message);
   }
@@ -124,14 +160,14 @@ export class DownloadPanel {
     const stats = this.theme.fg("muted", this.stats ?? (total > 0
       ? `${formatBinarySize(downloaded)} / ${formatBinarySize(total)}` : "Preparing download…"));
     const privacy = this.theme.fg("dim", "Models run locally — audio never leaves this machine.");
-    const hint = keyHint("tui.select.cancel", "stop (keeps progress)");
+    const hint = this.keys.hint("tui.select.cancel", "stop (keeps progress)");
     const activity = this.spinner.render(width);
-    const lines = ["", ...text(title), ...activity, ...text(progress), ...text(stats), ...text(privacy), "", ...text(hint)];
+    const lines = ["", ...text(title), ...activity, "", ...text(progress), "", ...text(stats), ...text(privacy), "", ...text(hint)];
     if (lines.length <= maxRows) return lines;
     // Small terminals keep the current operation and cancel key visible.
     const compact = [title, activity[1]?.trim() ?? this.state.message, progress, stats, privacy]
       .slice(0, Math.max(0, maxRows - 1));
-    return [...compact, keyHint("tui.select.cancel", "stop")].map((line) => truncateToWidth(` ${line}`, width));
+    return [...compact, this.keys.hint("tui.select.cancel", "stop")].map((line) => truncateToWidth(` ${line}`, width));
   }
 
   invalidate(): void { this.spinner.invalidate(); }
@@ -167,10 +203,12 @@ export class SingleSelectPicker<T extends string> extends Container implements F
     this.search.focused = value && Boolean(this.options.searchable);
   }
 
+  private readonly keys: TranscribeKeys;
+
   constructor(
     private readonly tui: TUI,
     private readonly theme: UiTheme,
-    private readonly keybindings: KeybindingsManager,
+    keybindings: KeybindingsManager,
     private readonly choices: readonly SingleSelectChoice<T>[],
     private readonly current: T | undefined,
     private readonly options: {
@@ -179,14 +217,15 @@ export class SingleSelectPicker<T extends string> extends Container implements F
       searchable?: boolean;
       maximumVisible?: number;
       cancelLabel?: string;
-      /** Extra footer legend, appended after the ● current marker. */
+      /** Extra footer legend, appended after the ✓ current marker. */
       legend?: string;
-      /** Custom row body after the cursor and ● markers; handles its own active styling. */
+      /** Custom row body after the cursor and ✓ markers; handles its own active styling. */
       renderLabel?: (choice: SingleSelectChoice<T>, active: boolean, width: number) => string;
     },
     private readonly done: (value: T | undefined) => void,
   ) {
     super();
+    this.keys = new TranscribeKeys(keybindings);
     this.visibleLimit = options.maximumVisible ?? 10;
     this.hasDescriptions = choices.some((choice) => choice.description);
     this.filtered = [...choices];
@@ -258,9 +297,7 @@ export class SingleSelectPicker<T extends string> extends Container implements F
         const prefix = active ? this.theme.fg("accent", "→ ") : "  ";
         const current = this.current === undefined
           ? ""
-          : choice.value === this.current
-            ? this.theme.fg("accent", "● ")
-            : "  ";
+          : `${selectionMarker(this.theme, choice.value === this.current)} `;
         const label = this.options.renderLabel
           ? this.options.renderLabel(choice, active, this.renderWidth)
           : active
@@ -288,13 +325,13 @@ export class SingleSelectPicker<T extends string> extends Container implements F
     const legend = [
       this.current === undefined
         ? undefined
-        : `${this.theme.fg("accent", "●")} ${this.theme.fg("dim", "current")}`,
+        : `${selectionMarker(this.theme, true)} ${this.theme.fg("dim", "current")}`,
       this.options.legend,
     ]
       .filter((value): value is string => Boolean(value))
       .join("  ");
     this.footer.setText(
-      `${this.theme.fg("dim", shown)}${legend ? `  ${legend}` : ""}\n${rawKeyHint("↑↓", "navigate")}  ${keyHint("tui.select.confirm", "select")}  ${keyHint("tui.select.cancel", query ? "clear search" : (this.options.cancelLabel ?? "back"))}`,
+      `${this.theme.fg("dim", shown)}${legend ? `  ${legend}` : ""}\n${this.keys.navHint("navigate")}  ${this.keys.hint("tui.select.confirm", "select")}  ${this.keys.hint("tui.select.cancel", query ? "clear search" : (this.options.cancelLabel ?? "back"))}`,
     );
     this.tui.requestRender();
   }
@@ -351,7 +388,7 @@ export class SingleSelectPicker<T extends string> extends Container implements F
   }
 
   handleInput(data: string): void {
-    if (this.keybindings.matches(data, "tui.select.up")) {
+    if (this.keys.matches(data, "tui.select.up")) {
       if (this.filtered.length > 0) {
         this.selectedIndex =
           this.selectedIndex === 0 ? this.filtered.length - 1 : this.selectedIndex - 1;
@@ -359,7 +396,7 @@ export class SingleSelectPicker<T extends string> extends Container implements F
       }
       return;
     }
-    if (this.keybindings.matches(data, "tui.select.down")) {
+    if (this.keys.matches(data, "tui.select.down")) {
       if (this.filtered.length > 0) {
         this.selectedIndex =
           this.selectedIndex === this.filtered.length - 1 ? 0 : this.selectedIndex + 1;
@@ -367,12 +404,12 @@ export class SingleSelectPicker<T extends string> extends Container implements F
       }
       return;
     }
-    if (this.keybindings.matches(data, "tui.select.confirm")) {
+    if (this.keys.matches(data, "tui.select.confirm")) {
       const selected = this.filtered[this.selectedIndex];
       if (selected) this.done(selected.value);
       return;
     }
-    if (this.keybindings.matches(data, "tui.select.cancel")) {
+    if (this.keys.matches(data, "tui.select.cancel")) {
       if (this.search.getValue()) {
         this.search.setValue("");
         this.selectedIndex = Math.max(

@@ -1,4 +1,5 @@
-import { Key, matchesKey, Text, truncateToWidth, type KeybindingsManager } from "@earendil-works/pi-tui";
+import { Text, truncateToWidth } from "@earendil-works/pi-tui";
+import type { TranscribeKeys } from "./keybindings.js";
 
 /** A bounded read-only view. Clipping never changes the underlying transcript. */
 export class TranscriptPreview {
@@ -7,6 +8,8 @@ export class TranscriptPreview {
   private offset = 0;
   private lineCount = 1;
   private pageSize = 1;
+
+  constructor(private readonly keys: TranscribeKeys) {}
 
   setText(content: string): void {
     if (this.content === content) return;
@@ -27,21 +30,21 @@ export class TranscriptPreview {
     const visible = lines.slice(this.offset, this.offset + this.pageSize);
     if (clipped && rows > 1) {
       visible.push(truncateToWidth(
-        muted(` ${this.offset + 1}–${this.offset + visible.length} / ${lines.length} lines · ↑↓ / PgUp PgDn scroll`), width,
+        muted(` ${this.offset + 1}–${this.offset + visible.length} / ${lines.length} lines · ${this.keys.navLabel()} / ${this.keys.keyText(["tui.select.pageUp", "tui.select.pageDown"])} scroll`), width,
       ));
     }
     return visible;
   }
 
-  handleInput(data: string, keys: KeybindingsManager): boolean {
+  handleInput(data: string): boolean {
     if (this.lineCount <= this.pageSize) return false;
     let offset = this.offset;
-    if (keys.matches(data, "tui.select.up")) offset--;
-    else if (keys.matches(data, "tui.select.down")) offset++;
-    else if (matchesKey(data, Key.pageUp)) offset -= this.pageSize;
-    else if (matchesKey(data, Key.pageDown)) offset += this.pageSize;
-    else if (matchesKey(data, Key.home)) offset = 0;
-    else if (matchesKey(data, Key.end)) offset = this.lineCount - this.pageSize;
+    if (this.keys.matches(data, "tui.select.up")) offset--;
+    else if (this.keys.matches(data, "tui.select.down")) offset++;
+    else if (this.keys.matches(data, "tui.select.pageUp")) offset -= this.pageSize;
+    else if (this.keys.matches(data, "tui.select.pageDown")) offset += this.pageSize;
+    else if (this.keys.matches(data, "transcribe.scroll.top")) offset = 0;
+    else if (this.keys.matches(data, "transcribe.scroll.bottom")) offset = this.lineCount - this.pageSize;
     else return false;
     this.offset = Math.max(0, Math.min(offset, this.lineCount - this.pageSize));
     return true;

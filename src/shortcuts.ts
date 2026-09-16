@@ -1,8 +1,4 @@
-import {
-  keyHint,
-  rawKeyHint,
-  type ExtensionContext,
-} from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   Container,
   parseKey,
@@ -18,6 +14,7 @@ import {
   displayShortcut,
   normalizeShortcut,
 } from "./shortcut-core.js";
+import { TranscribeKeys } from "./keybindings.js";
 import { panelBorder } from "./ui-components.js";
 
 type UiTheme = ExtensionContext["ui"]["theme"];
@@ -50,6 +47,7 @@ export function createShortcutPicker(
   current: string,
   done: (shortcut: string | undefined) => void,
 ): Component {
+  const keys = new TranscribeKeys(keybindings);
   let phase: Phase = { kind: "waiting" };
   const container = new Container();
 
@@ -84,7 +82,7 @@ export function createShortcutPicker(
       container.addChild(new Spacer(1));
       container.addChild(
         new Text(
-          `${keyHint("tui.select.confirm", "keep")}  ${rawKeyHint("d", "default")}  ${theme.fg("dim", "press another shortcut to replace")}  ${keyHint("tui.select.cancel", "back")}`,
+          `${keys.hint("tui.select.confirm", "keep")}  ${keys.hint("transcribe.shortcut.useDefault", "default")}  ${theme.fg("dim", "press another shortcut to replace")}  ${keys.hint("tui.select.cancel", "back")}`,
           1,
           0,
         ),
@@ -100,7 +98,7 @@ export function createShortcutPicker(
       container.addChild(new Spacer(1));
       container.addChild(
         new Text(
-          `${rawKeyHint("d", `default (${displayShortcut(DEFAULT_SHORTCUT)})`)}  ${keyHint("tui.select.cancel", "back")}`,
+          `${keys.hint("transcribe.shortcut.useDefault", `default (${displayShortcut(DEFAULT_SHORTCUT)})`)}  ${keys.hint("tui.select.cancel", "back")}`,
           1,
           0,
         ),
@@ -121,17 +119,17 @@ export function createShortcutPicker(
     },
 
     handleInput(data: string): void {
-      if (keybindings.matches(data, "tui.select.cancel")) {
+      if (keys.matches(data, "tui.select.cancel")) {
         done(undefined);
         return;
       }
 
-      if (keybindings.matches(data, "tui.select.confirm")) {
+      if (keys.matches(data, "tui.select.confirm")) {
         if (phase.kind === "preview") done(phase.normalized);
         return;
       }
 
-      if (data === "d") {
+      if (keys.matches(data, "transcribe.shortcut.useDefault")) {
         phase = {
           kind: "preview",
           normalized: DEFAULT_SHORTCUT,
