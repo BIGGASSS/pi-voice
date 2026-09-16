@@ -5,7 +5,6 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { getKeybindings } from "@earendil-works/pi-tui";
 import { existsSync } from "node:fs";
-import { displayLanguage, getCatalogModel } from "./catalog.js";
 import { DictationController } from "./dictation-controller.js";
 import { TranscribeKeys } from "./keybindings.js";
 import type { TranscribeSettings } from "./settings.js";
@@ -19,9 +18,8 @@ type ActiveRecording = {
 };
 
 const COMPLETION_WIDGET_MS = 5_000;
-/** Setup confirmation stays long enough to read the shortcut; a changed shortcut longer still. */
-const READY_WIDGET_MS = 10_000;
-const RELOAD_WIDGET_MS = 20_000;
+/** Setup confirmation stays long enough to read the shortcut and follow-up command. */
+const READY_WIDGET_MS = 20_000;
 
 export type PiTranscribeRuntime = {
   readonly service: TranscriptionService;
@@ -91,15 +89,15 @@ export function createPiTranscribeRuntime(
   }
 
   async function notifyReady(ctx: ExtensionContext, configured: TranscribeSettings): Promise<void> {
-    const model = getCatalogModel(configured.model.id);
-    const languages = configured.preferredLanguages.map(displayLanguage).join(", ");
     // Pi binds shortcuts at extension load. The command path reloads on its
     // own; the shortcut path cannot, so say what it takes to use a new one.
     const reloadNeeded = configured.shortcut !== registeredShortcut;
     const talk = reloadNeeded
       ? `run /reload, then ${displayShortcut(configured.shortcut)} to talk`
       : `${displayShortcut(configured.shortcut)} to talk`;
-    const summary = `${languages} · ${model?.name ?? configured.model.id} · /transcribe for settings`;
+    const command = "/transcribe";
+    const commandDescription = "to change settings and download new models";
+    const summary = `${command} ${commandDescription}`;
 
     // The TUI renders a success-colored widget in the meter slot so the user
     // sees where pi-transcribe talks to them. RPC and print keep the plain
@@ -109,12 +107,11 @@ export function createPiTranscribeRuntime(
       return;
     }
     const { clearTranscribeWidget, showReadyStatus } = await loadVisualizer();
-    showReadyStatus(ctx, { talk, summary });
-    holdCompletionWidget(
-      ctx,
-      clearTranscribeWidget,
-      reloadNeeded ? RELOAD_WIDGET_MS : READY_WIDGET_MS,
-    );
+    showReadyStatus(ctx, {
+      talk,
+      help: { command, description: commandDescription },
+    });
+    holdCompletionWidget(ctx, clearTranscribeWidget, READY_WIDGET_MS);
   }
 
   async function loadSettingsOnce(): Promise<void> {
@@ -343,7 +340,13 @@ export function createPiTranscribeRuntime(
         await reportDictationError(ctx, controller);
         return;
       }
-      meter.start(ctx);
+      // Key text via the same formatter as the Try It pane so the meter
+      // reads exactly like the hint the user learned during setup.
+      const cancelKeys = new TranscribeKeys(getKeybindings()).keyText("transcribe.dictation.cancel");
+      meter.start(ctx, {
+        action: `${displayShortcut(registeredShortcut)} to transcribe`,
+        discard: `${cancelKeys} to discard`,
+      });
       meter.setModelState(controller.modelState);
       recording = { dictation: controller, meter };
       listenForCancel(ctx);

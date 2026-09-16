@@ -6,7 +6,6 @@ import {
   type CatalogModelPostActivation,
 } from "./model-picker.js";
 import { createModelActivation } from "./model-activation.js";
-import { chooseYourModel, downloadedCatalogModels } from "./your-models-picker.js";
 import { testMicrophonePermission } from "./audio.js";
 import { chooseMicrophone, microphonesEqual } from "./microphone-picker.js";
 import {
@@ -85,41 +84,20 @@ export async function runModelSelection(
     },
   );
 
-  // Switching between the models already on disk is the everyday case and
-  // gets the first page; the catalog is one row further. A single downloaded
-  // model is nothing to switch between, so the catalog opens directly.
-  const switching = () => downloadedCatalogModels().length >= 2;
-  let page: "yours" | "browse" = switching() ? "yours" : "browse";
+  // One pane switches between the models on disk and downloads new ones.
   while (true) {
-    const paneOptions = {
+    const selection = await chooseCatalogModel(ctx, preferredLanguages, currentModelId, {
       postActivation: options.postActivation,
       // Keep the post-selection state when the picker reopens after a
       // round-trip through the language step.
       activatedInFlow: configured !== undefined,
       onActivate: activate,
-    };
-    // Frozen at open so the footer label and the route Esc takes agree even
-    // if a download during this pane makes switching() flip.
-    const cameFromYours = page === "browse" && switching();
-    const selection = page === "yours"
-      ? await chooseYourModel(ctx, preferredLanguages, currentModelId, paneOptions)
-      : await chooseCatalogModel(ctx, preferredLanguages, currentModelId, {
-          ...paneOptions,
-          cancelLabel: cameFromYours ? "back" : "close",
-        });
+      cancelLabel: "close",
+    });
     // The picker can close while its last commit is still in flight; wait so
     // configured reflects every selection that will land on disk.
     await waitForCommits();
 
-    if (selection?.type === "browse") {
-      page = "browse";
-      continue;
-    }
-    if (!selection && cameFromYours) {
-      // Esc from the catalog steps back to the downloaded models.
-      page = "yours";
-      continue;
-    }
     if (!selection || selection.type === "complete") return configured;
 
     // Esc and Continue both keep the selection here; the picker edits live

@@ -100,7 +100,7 @@ function settingsHomeChoices(
       value: "model",
       label: "Model",
       summary: model.name,
-      description: "Local speech-recognition model; audio never leaves this machine",
+      description: "Switch between downloaded models, or download a new one",
     },
     {
       value: "transcription-language",

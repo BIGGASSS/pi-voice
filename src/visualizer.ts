@@ -132,18 +132,21 @@ export function clearTranscribeWidget(ctx: ExtensionContext): void {
 
 /**
  * Ready line shown when setup finishes: a green check, then the body in the
- * terminal's default foreground so it matches what the user types, with the
- * details dim. The caller decides how long it stays.
+ * terminal's default foreground so it matches what the user types. The help
+ * command is accented and its description muted. The caller decides how long it stays.
  */
 export function showReadyStatus(
   ctx: ExtensionContext,
-  options: { talk: string; summary: string },
+  options: {
+    talk: string;
+    help: { command: string; description: string };
+  },
 ): void {
   if (!ctx.hasUI) return;
   const theme = ctx.ui.theme;
   ctx.ui.setWidget(WIDGET_KEY, [
     `${theme.fg("success", "✓")} pi-transcribe ready · ${options.talk}`,
-    theme.fg("dim", options.summary),
+    `${theme.fg("accent", options.help.command)} ${theme.fg("muted", options.help.description)}`,
   ]);
 }
 
@@ -185,7 +188,8 @@ export function renderMeterLine(
     bands: readonly number[];
     elapsedMs: number;
     modelState: MeterModelState;
-    hint?: string;
+    actionHint?: string;
+    discardHint?: string;
   },
 ): string {
   const parts = [
@@ -194,7 +198,8 @@ export function renderMeterLine(
   ];
   if (options.modelState === "loading") parts.push(theme.fg("dim", "loading model"));
   if (options.modelState === "failed") parts.push(theme.fg("warning", "model load failed"));
-  if (options.hint) parts.push(theme.fg("dim", options.hint));
+  if (options.actionHint) parts.push(theme.fg("muted", options.actionHint));
+  if (options.discardHint) parts.push(theme.fg("dim", options.discardHint));
   return parts.join("  ");
 }
 
@@ -206,10 +211,15 @@ export class RecordingMeter {
   private lastLine: string | undefined;
   private ctx: ExtensionContext | undefined;
   private modelState: MeterModelState = "loading";
+  private hints: { action: string; discard: string } | undefined;
 
-  start(ctx: ExtensionContext): void {
+  start(
+    ctx: ExtensionContext,
+    hints: { action: string; discard: string },
+  ): void {
     if (!ctx.hasUI) return;
     this.ctx = ctx;
+    this.hints = hints;
     this.startedAt = Date.now();
     this.analyzer.reset();
     this.nextPaintAt = 0;
@@ -238,6 +248,7 @@ export class RecordingMeter {
     if (options?.clearWidget !== false) this.ctx?.ui.setWidget(WIDGET_KEY, undefined);
     this.ctx = undefined;
     this.lastLine = undefined;
+    this.hints = undefined;
   }
 
   private paint(): void {
@@ -248,7 +259,8 @@ export class RecordingMeter {
       bands: this.analyzer.bands,
       elapsedMs: Date.now() - this.startedAt,
       modelState: this.modelState,
-      hint: "esc to cancel",
+      actionHint: this.hints?.action,
+      discardHint: this.hints?.discard,
     });
     if (line === this.lastLine) return;
     this.lastLine = line;

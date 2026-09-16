@@ -9,7 +9,6 @@ import { Deferred } from "../src/deferred.js";
 import { CatalogModelPicker, LanguagePicker } from "../src/model-picker.js";
 import { changeOnboardingModel, runModelSelection, runOnboarding } from "../src/onboarding.js";
 import { RecommendedModelPicker } from "../src/recommendation-picker.js";
-import { YourModelsPicker } from "../src/your-models-picker.js";
 import { CATALOG_MODELS } from "../src/catalog.js";
 import { recommendModels } from "../src/recommendations.js";
 import { readSettings, settingsForModel, writeSettings } from "../src/settings.js";
@@ -277,22 +276,4 @@ test("Tab keeps forward actions while Ctrl+L changes languages across model pane
   catalog.handleInput("\x0c");
   assert.deepEqual(catalogResults, [{ type: "change-languages" }]);
   catalog.dispose();
-
-  const yourModelResults: unknown[] = [];
-  const yourModels = new YourModelsPicker(
-    testTui(24), testTheme(), keybindings(), ["en"], undefined,
-    (result) => yourModelResults.push(result), activate,
-  );
-  yourModels.handleInput("\x0c");
-  assert.deepEqual(yourModelResults, [{ type: "change-languages" }]);
-  yourModels.dispose();
-
-  const browseResults: unknown[] = [];
-  const browse = new YourModelsPicker(
-    testTui(24), testTheme(), keybindings(), ["en"], undefined,
-    (result) => browseResults.push(result), activate,
-  );
-  browse.handleInput("\t");
-  assert.deepEqual(browseResults, [{ type: "browse" }]);
-  browse.dispose();
 });

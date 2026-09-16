@@ -31,6 +31,7 @@ import {
 } from "./recommendations.js";
 import {
   MANUAL_LANGUAGE_TAG,
+  ON_DISK_LABEL,
   matchesCatalogSearch,
   modelDetailText,
   modelTableLayout,
@@ -390,8 +391,6 @@ export class CatalogModelPicker extends Container implements Focusable {
   private readonly searchBox = new Box(LIST_PADDING, 0);
   private readonly body = new Container();
   private readonly preferredLine = new Text("", TEXT_PADDING, 0);
-  /** Column headings: the language code over each grade cell. */
-  private readonly header = new Text("", LIST_PADDING, 0);
   private readonly list = new Container();
   private readonly detail = new Text("", TEXT_PADDING, 0);
   private readonly footer = new Text("", TEXT_PADDING, 0);
@@ -505,17 +504,19 @@ export class CatalogModelPicker extends Container implements Focusable {
       ...CATALOG_MODELS.map((model) => visibleWidth(model.name)),
     );
     this.modelSizeWidth = Math.max(
+      visibleWidth(ON_DISK_LABEL),
       ...CATALOG_MODELS.map((model) => visibleWidth(formatBinarySize(model.size))),
     );
 
+    const title = options.title ?? (options.onboardingStep ? "Browse all models" : "Choose a model");
     this.searchBox.addChild(this.search);
     this.addChild(panelBorder(theme));
     this.addChild(new Spacer(1));
     this.addChild(
       options.onboardingStep
-        ? onboardingHeader(theme, options.title ?? "Browse all models", options.onboardingStep)
+        ? onboardingHeader(theme, title, options.onboardingStep)
         : new Text(
-            theme.fg("accent", theme.bold(options.title ?? "Choose a transcription model")),
+            theme.fg("accent", theme.bold(title)),
             TEXT_PADDING,
             0,
           ),
@@ -525,9 +526,30 @@ export class CatalogModelPicker extends Container implements Focusable {
     this.addChild(new Spacer(1));
     this.addChild(panelBorder(theme));
 
-    // The cursor starts at the top, on the best recommendation; ✓ marks the
-    // current model wherever it sits.
+    // The cursor opens on the model in use, the first row of Downloaded;
+    // without one it rests at the top, on the best recommendation.
     this.refresh();
+    if (currentModelId) {
+      const index = this.rows.findIndex(
+        (row) => row.type === "model" && row.model.id === currentModelId,
+      );
+      if (index !== -1) {
+        this.selectedIndex = index;
+        this.refresh();
+      }
+    }
+  }
+
+  /** Cached models, current first, then most accurate on the chosen languages. */
+  private downloadedModels(): CatalogModel[] {
+    const currentId = this.selection.displayedModelId;
+    const error = (model: CatalogModel) =>
+      this.benchmarks.get(model.id)?.error ?? Number.POSITIVE_INFINITY;
+    return CATALOG_MODELS.filter((model) => this.selection.cachedById.has(model.id)).sort(
+      (left, right) =>
+        Number(right.id === currentId) - Number(left.id === currentId) ||
+        error(left) - error(right),
+    );
   }
 
   // Section headings and the gaps above them are landmarks, not choices:
@@ -552,15 +574,18 @@ export class CatalogModelPicker extends Container implements Focusable {
     return row?.type === "model" ? row.model : undefined;
   }
 
-  // The sectioned list. A search filters each section in place, in its own
-  // order, and reaches the folded models too: while a query is on they are a
-  // section of their own, so a match there says why it was folded.
+  // The sectioned list: models on disk first, then the ranked catalog with
+  // each of them left out, so a model is listed once. A search filters each
+  // section in place, in its own order, and reaches the folded models too:
+  // while a query is on they are a section of their own, so a match there
+  // says why it was folded.
   private buildRows(query: string): ListRow[] {
-    const keep = (models: readonly CatalogModel[]) =>
+    const downloaded = this.downloadedModels();
+    const onDisk = new Set(downloaded.map((model) => model.id));
+    const matching = (models: readonly CatalogModel[]) =>
       query ? models.filter((model) => matchesCatalogSearch(model, query)) : models;
-    if (!this.languageColumns.length) {
-      return keep(this.unbenchmarked).map((model) => ({ type: "model", model }));
-    }
+    const keep = (models: readonly CatalogModel[]) =>
+      matching(models).filter((model) => !onDisk.has(model.id));
     const rows: ListRow[] = [];
     const section = (label: string, models: readonly CatalogModel[]) => {
       if (!models.length) return;
@@ -568,12 +593,18 @@ export class CatalogModelPicker extends Container implements Focusable {
       rows.push({ type: "section", label });
       for (const model of models) rows.push({ type: "model", model });
     };
-    const languages = this.languageColumns.map(displayLanguage).join(", ");
-    section("Recommended · most accurate first", keep(this.recommended));
-    section(`${this.recommended.length ? "Other" : "All"} models for ${languages}`, keep(this.benchmarked));
+    // Every section row is also the column header row, so the language the
+    // grades cover is on the same line and the labels can stay short.
+    section("Downloaded", matching(downloaded));
+    if (!this.languageColumns.length) {
+      section("All models", keep(this.unbenchmarked));
+      return rows;
+    }
+    section("Recommended", keep(this.recommended));
+    section(`${this.recommended.length ? "Other" : "All"} models`, keep(this.benchmarked));
     const rest = keep(this.unbenchmarked);
     if (query) {
-      section("Not for your languages", rest);
+      section("Other languages", rest);
     } else if (rest.length) {
       rows.push({ type: "fold", count: rest.length });
       if (!this.folded) for (const model of rest) rows.push({ type: "model", model });
@@ -632,7 +663,7 @@ export class CatalogModelPicker extends Container implements Focusable {
       ? ""
       : ` · ${this.keys.hint("transcribe.languages.change", "change")}`;
     const languagesText = truncateToWidth(
-      `Languages: ${this.preferredLanguages.map(displayLanguage).join(", ")}`,
+      `Your languages: ${this.preferredLanguages.map(displayLanguage).join(", ")}`,
       Math.max(24, this.renderWidth - TEXT_PADDING * 2 - visibleWidth(preferredAction)),
       "…",
     );
@@ -650,7 +681,6 @@ export class CatalogModelPicker extends Container implements Focusable {
     this.body.addChild(new Spacer(1));
     this.body.addChild(this.searchBox);
     this.body.addChild(new Spacer(1));
-    this.body.addChild(this.header);
     this.body.addChild(this.list);
     this.body.addChild(new Spacer(1));
     this.body.addChild(this.detail);
@@ -669,7 +699,6 @@ export class CatalogModelPicker extends Container implements Focusable {
     const displayedId = this.selection.displayedModelId;
 
     if (this.rows.length === 0) {
-      this.header.setText("");
       this.list.addChild(new Text(this.theme.fg("dim", "  No matching models"), LIST_PADDING, 0));
       this.detail.setText("");
     } else {
@@ -681,7 +710,6 @@ export class CatalogModelPicker extends Container implements Focusable {
         this.languageColumns,
         this.modelSizeWidth,
       );
-      this.header.setText(table.header);
       for (let index = start; index < end; index += 1) {
         const row = this.rows[index]!;
         const active = index === this.selectedIndex;
@@ -691,7 +719,7 @@ export class CatalogModelPicker extends Container implements Focusable {
           continue;
         }
         if (row.type === "section") {
-          this.list.addChild(new Text(`  ${this.theme.fg("muted", row.label)}`, LIST_PADDING, 0));
+          this.list.addChild(new Text(table.header(row.label), LIST_PADDING, 0));
           continue;
         }
         if (row.type === "fold") {
@@ -716,6 +744,7 @@ export class CatalogModelPicker extends Container implements Focusable {
               active,
               current: model.id === displayedId,
               tag,
+              downloaded: this.selection.cachedById.has(model.id),
             }),
             LIST_PADDING,
             0,

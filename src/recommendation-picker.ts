@@ -139,7 +139,7 @@ export class RecommendedModelPicker extends Container implements Focusable {
     );
     this.addChild(
       new Text(
-        `${theme.fg("muted", `Languages: ${languages.map(displayLanguage).join(", ")}`)} · ${this.keys.hint("transcribe.languages.change", "change")}`,
+        `${theme.fg("muted", `Your languages: ${languages.map(displayLanguage).join(", ")}`)} · ${this.keys.hint("transcribe.languages.change", "change")}`,
         PANEL_PADDING,
         0,
       ),

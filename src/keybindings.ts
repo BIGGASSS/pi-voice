@@ -23,7 +23,6 @@ export const TRANSCRIBE_KEYBINDINGS = {
   "transcribe.languages.continue": { defaultKeys: "tab", description: "Continue with the selected languages" },
   "transcribe.languages.change": { defaultKeys: "ctrl+l", description: "Change spoken languages" },
   "transcribe.recommendations.browseAll": { defaultKeys: "o", description: "Browse all models" },
-  "transcribe.yourModels.browse": { defaultKeys: "tab", description: "Browse all models" },
   "transcribe.models.ratingsHelp": { defaultKeys: "?", description: "Open the rating guide" },
   "transcribe.ratingsHelp.close": { defaultKeys: "q", description: "Close the rating guide" },
   "transcribe.scroll.top": { defaultKeys: "home", description: "Scroll to the top" },

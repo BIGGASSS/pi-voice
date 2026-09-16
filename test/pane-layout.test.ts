@@ -14,7 +14,6 @@ import { RecommendedModelPicker } from "../src/recommendation-picker.js";
 import type { TranscribeSettings } from "../src/settings.js";
 import { TryItPane } from "../src/try-it.js";
 import { SingleSelectPicker } from "../src/ui-components.js";
-import { YourModelsPicker } from "../src/your-models-picker.js";
 import { isolatedModelCache } from "./model-cache-helper.js";
 import { keybindings, testTheme, testTui } from "./ui-helpers.js";
 
@@ -65,9 +64,6 @@ test("editor-mounted panes respect the shared 80x24 row and width budget", async
 
   const factories: [string, () => TestPane][] = [
     ["catalog models", () => new CatalogModelPicker(
-      makeTui(), testTheme(), keybindings(), ["en"], undefined, () => {}, pendingActivation,
-    )],
-    ["your models", () => new YourModelsPicker(
       makeTui(), testTheme(), keybindings(), ["en"], undefined, () => {}, pendingActivation,
     )],
     ["recommendations", () => new RecommendedModelPicker(

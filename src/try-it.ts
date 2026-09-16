@@ -168,7 +168,7 @@ export class TryItPane implements Component {
 
     let hints: string;
     if (state.phase === "listening") {
-      hints = `${rawKeyHint(shortcut, "stop")}  ${this.keys.hint("tui.select.cancel", "discard")}`;
+      hints = `${rawKeyHint(shortcut, "to transcribe")}  ${this.keys.hint("tui.select.cancel", "to discard")}`;
     } else if (
       state.phase === "transcribing" ||
       state.phase === "starting" ||
