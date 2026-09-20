@@ -7,7 +7,7 @@ import test from "node:test";
 // native recorder, transcribe-cpp, and the TUI until they are actually used.
 // This walks the compiled JS, where type-only imports are already erased and
 // dynamic import() calls never match the static `from`/`import "…"` pattern.
-const NATIVE_OR_TUI = ["audio", "transcription", "visualizer", "file-audio"];
+const NATIVE_OR_TUI = ["audio", "transcription", "visualizer"];
 const BOUNDARIES: Record<string, string[]> = {
   index: ["runtime", ...NATIVE_OR_TUI],
   runtime: NATIVE_OR_TUI,

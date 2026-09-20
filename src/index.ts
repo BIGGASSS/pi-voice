@@ -1,7 +1,6 @@
 import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { registerFileTranscriptionTool } from "./file-transcription.js";
 import type { PiTranscribeRuntime } from "./runtime.js";
 import { displayShortcut, STATUS_WIDGET_KEY } from "./shortcut-core.js";
 import { readShortcutForRegistration } from "./startup-shortcut.js";
@@ -34,11 +33,6 @@ export default function piTranscribe(pi: ExtensionAPI): void {
         "info",
       );
     }
-  });
-
-  const fileTranscription = registerFileTranscriptionTool(pi, {
-    getSettings: async () => (await loadRuntime()).requireConfiguredSettingsForTool(),
-    getService: async () => (await loadRuntime()).service,
   });
 
   pi.registerShortcut(
@@ -78,7 +72,6 @@ export default function piTranscribe(pi: ExtensionAPI): void {
 
   pi.on("session_shutdown", async (_event, ctx) => {
     shuttingDown = true;
-    await fileTranscription.shutdown().catch(() => undefined);
     const loading = runtimePromise;
     if (!loading) return;
     const runtime = await loading.catch(() => undefined);

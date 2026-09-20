@@ -23,7 +23,6 @@ const READY_WIDGET_MS = 20_000;
 
 export type PiTranscribeRuntime = {
   readonly service: TranscriptionService;
-  requireConfiguredSettingsForTool(): Promise<TranscribeSettings>;
   toggleCapture(ctx: ExtensionContext): Promise<void>;
   showSettings(ctx: ExtensionCommandContext): Promise<void>;
   replayOnboarding(ctx: ExtensionCommandContext): Promise<void>;
@@ -177,26 +176,6 @@ export function createPiTranscribeRuntime(
       : await configureFirstRun(ctx);
     if (configured) await notifyReady(ctx, configured);
     return { configured, completedFirstRun: previous === undefined && configured !== undefined };
-  }
-
-  async function requireConfiguredSettingsForTool(): Promise<TranscribeSettings> {
-    await loadSettingsOnce();
-    if (settingsReadWarning) {
-      throw new Error(
-        `${settingsReadWarning} Ask the user to run /transcribe in Pi's interactive TUI to configure a local model, then retry transcribe_file.`,
-      );
-    }
-    if (!settings) {
-      throw new Error(
-        "pi-transcribe is not configured. Ask the user to run /transcribe in Pi's interactive TUI once to choose and download a local model, then retry transcribe_file.",
-      );
-    }
-    if (!existsSync(settings.model.path)) {
-      throw new Error(
-        `The configured transcription model is missing: ${settings.model.path}. Ask the user to run /transcribe and choose a model again, then retry transcribe_file.`,
-      );
-    }
-    return settings;
   }
 
   function listenForCancel(ctx: ExtensionContext): void {
@@ -491,7 +470,6 @@ export function createPiTranscribeRuntime(
 
   return {
     service: transcriptionService,
-    requireConfiguredSettingsForTool,
     toggleCapture,
     showSettings,
     replayOnboarding,
