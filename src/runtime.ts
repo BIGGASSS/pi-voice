@@ -277,7 +277,8 @@ export function createPiTranscribeRuntime(
     const active = recording!;
     recording = undefined;
     active.meter.stop({ clearWidget: false });
-    showTranscribeStatus(ctx, "Transcribing…", { cancelable: true });
+    const cancelKeys = new TranscribeKeys(getKeybindings()).keyText("transcribe.dictation.cancel");
+    showTranscribeStatus(ctx, "Transcribing…", { cancelKeys });
     let keepCompletionVisible = false;
     try {
       const result = await active.dictation.stop();

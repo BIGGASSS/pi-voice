@@ -117,11 +117,11 @@ export function formatTranscriptionSummary(
 export function showTranscribeStatus(
   ctx: ExtensionContext,
   text: string,
-  options?: { cancelable?: boolean },
+  options?: { cancelKeys?: string },
 ): void {
   if (!ctx.hasUI) return;
   const theme = ctx.ui.theme;
-  const hint = options?.cancelable ? `  ${theme.fg("dim", "esc to cancel")}` : "";
+  const hint = options?.cancelKeys ? `  ${theme.fg("dim", `${options.cancelKeys} to cancel`)}` : "";
   ctx.ui.setWidget(WIDGET_KEY, [`${theme.fg("muted", text)}${hint}`]);
 }
 

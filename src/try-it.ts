@@ -154,7 +154,7 @@ export class TryItPane implements Component {
       content = transcript || fg("muted", "No speech detected");
       activity = fg("muted", formatTranscriptionSummary(speechSeconds, transcribeSeconds));
       if (needsFasterModel(speechSeconds, transcribeSeconds)) {
-        details = fg("warning", "Slow on this machine? Press c to try another model.");
+        details = fg("warning", `Slow on this machine? Press ${this.keys.keyText("transcribe.tryIt.model")} to try another model.`);
       }
     } else if (state.phase === "error") {
       activity = fg("error", state.stage === "model" ? "Could not load the model" : state.stage === "capture" ? "Microphone capture failed" : "Transcription failed");

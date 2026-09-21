@@ -688,9 +688,17 @@ export class CatalogModelPicker extends Container implements Focusable {
     this.body.addChild(this.footer);
 
     const query = this.search.getValue().trim();
+    // Selecting a model reorders the Downloaded section, so the cursor
+    // follows the highlighted model rather than its old row number.
+    const highlightedId = this.highlightedModel()?.id;
     this.rows = this.buildRows(query);
     this.filtered = this.rows.flatMap((row) => (row.type === "model" ? [row.model] : []));
-    this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.rows.length - 1));
+    const followed = highlightedId === undefined
+      ? -1
+      : this.rows.findIndex((row) => row.type === "model" && row.model.id === highlightedId);
+    this.selectedIndex = followed !== -1
+      ? followed
+      : Math.min(this.selectedIndex, Math.max(0, this.rows.length - 1));
     if (!this.selectable(this.selectedIndex)) {
       const next = this.rows.findIndex((_, index) => index > this.selectedIndex && this.selectable(index));
       this.selectedIndex = next === -1 ? this.selectedIndex : next;
