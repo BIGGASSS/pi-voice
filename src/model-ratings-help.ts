@@ -8,7 +8,7 @@ import {
   type TUI,
 } from "@earendil-works/pi-tui";
 import { gradeStyle } from "./model-cells.js";
-import type { TranscribeKeys } from "./keybindings.js";
+import type { VoiceKeys } from "./keybindings.js";
 import { PANEL_PADDING, panelBorder, paneRowBudget } from "./ui-components.js";
 
 type UiTheme = ExtensionContext["ui"]["theme"];
@@ -28,7 +28,7 @@ export class ModelRatingsHelp implements Component {
   constructor(
     private readonly tui: TUI,
     private readonly theme: UiTheme,
-    private readonly keys: TranscribeKeys,
+    private readonly keys: VoiceKeys,
     private readonly catalog: boolean,
   ) {}
 
@@ -104,14 +104,14 @@ export class ModelRatingsHelp implements Component {
     const scroll = scrollable ? `${this.keys.navHint("scroll")}  ` : "";
     const more = [this.offset > 0 ? "↑ above" : "", this.offset + this.pageSize < lines.length ? "↓ more" : ""]
       .filter(Boolean).join(" · ");
-    const backKeys = ["transcribe.ratingsHelp.close", "tui.select.cancel"] as const;
+    const backKeys = ["voice.ratingsHelp.close", "tui.select.cancel"] as const;
     const back = this.keys.hint(backKeys, "back to models");
     const hints = [
       `${scroll}${more ? `${this.theme.fg("dim", more)}  ` : ""}${back}`,
       `${scroll}${back}`,
       back,
       this.keys.hint(backKeys, "back"),
-      this.keys.hint("transcribe.ratingsHelp.close", "back"),
+      this.keys.hint("voice.ratingsHelp.close", "back"),
     ];
     const footer = hints.find((hint) => visibleWidth(hint) <= width - PANEL_PADDING * 2) ?? hints[hints.length - 1]!;
     return [
@@ -127,7 +127,7 @@ export class ModelRatingsHelp implements Component {
   handleInput(data: string): void {
     if (
       this.keys.matches(data, "tui.select.cancel") ||
-      this.keys.matches(data, "transcribe.ratingsHelp.close")
+      this.keys.matches(data, "voice.ratingsHelp.close")
     ) {
       this.close();
       return;
@@ -137,8 +137,8 @@ export class ModelRatingsHelp implements Component {
     // Keep a little context across pages, particularly section headings.
     else if (this.keys.matches(data, "tui.select.pageUp")) this.offset -= Math.max(1, this.pageSize - 2);
     else if (this.keys.matches(data, "tui.select.pageDown")) this.offset += Math.max(1, this.pageSize - 2);
-    else if (this.keys.matches(data, "transcribe.scroll.top")) this.offset = 0;
-    else if (this.keys.matches(data, "transcribe.scroll.bottom")) this.offset = this.lineCount - this.pageSize;
+    else if (this.keys.matches(data, "voice.scroll.top")) this.offset = 0;
+    else if (this.keys.matches(data, "voice.scroll.bottom")) this.offset = this.lineCount - this.pageSize;
     else return; // In particular, Enter and typing never reach the model list.
     this.offset = Math.max(0, Math.min(this.offset, this.lineCount - this.pageSize));
     this.tui.requestRender();

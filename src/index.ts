@@ -1,24 +1,24 @@
-import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
 import { registerFileTranscriptionTool } from "./file-transcription.js";
-import type { PiTranscribeRuntime } from "./runtime.js";
+import type { PiVoiceRuntime } from "./runtime.js";
 import { displayShortcut, STATUS_WIDGET_KEY } from "./shortcut-core.js";
+import { legacySettingsPath, settingsPath } from "./settings-path.js";
 import { readShortcutForRegistration } from "./startup-shortcut.js";
 
 // Pi awaits extension module evaluation before continuing startup. Keep this
 // entry point registration-only and load feature implementations on first use.
-export default function piTranscribe(pi: ExtensionAPI): void {
+export default function piVoice(pi: ExtensionAPI): void {
   const registeredShortcut = readShortcutForRegistration();
-  let runtimePromise: Promise<PiTranscribeRuntime> | undefined;
+  let runtimePromise: Promise<PiVoiceRuntime> | undefined;
   let shuttingDown = false;
 
-  function loadRuntime(): Promise<PiTranscribeRuntime> {
-    if (shuttingDown) return Promise.reject(new Error("pi-transcribe is shutting down"));
+  function loadRuntime(): Promise<PiVoiceRuntime> {
+    if (shuttingDown) return Promise.reject(new Error("Pi Voice is shutting down"));
     if (runtimePromise) return runtimePromise;
 
-    const loading = import("./runtime.js").then(({ createPiTranscribeRuntime }) =>
-      createPiTranscribeRuntime(pi, registeredShortcut),
+    const loading = import("./runtime.js").then(({ createPiVoiceRuntime }) =>
+      createPiVoiceRuntime(pi, registeredShortcut),
     );
     runtimePromise = loading;
     void loading.catch(() => {
@@ -28,9 +28,9 @@ export default function piTranscribe(pi: ExtensionAPI): void {
   }
 
   pi.on("session_start", (_event, ctx) => {
-    if (!existsSync(join(getAgentDir(), "pi-transcribe.json"))) {
+    if (!existsSync(settingsPath()) && !existsSync(legacySettingsPath())) {
       ctx.ui.notify(
-        `pi-transcribe installed · press ${displayShortcut(registeredShortcut)} or run /transcribe to set up`,
+        `Pi Voice installed · press ${displayShortcut(registeredShortcut)} or run /voice-settings to set up`,
         "info",
       );
     }
@@ -64,14 +64,23 @@ export default function piTranscribe(pi: ExtensionAPI): void {
     },
   );
 
+  const openSettings = async (
+    _args: string,
+    ctx: ExtensionCommandContext,
+  ): Promise<void> => (await loadRuntime()).showSettings(ctx);
+
+  pi.registerCommand("voice-settings", {
+    description: "Open Pi Voice settings",
+    handler: openSettings,
+  });
   pi.registerCommand("transcribe", {
-    description: "Open pi-transcribe settings",
-    handler: async (_args, ctx) => (await loadRuntime()).showSettings(ctx),
+    description: "Open Pi Voice settings (alias for /voice-settings)",
+    handler: openSettings,
   });
 
-  if (process.env.PI_TRANSCRIBE_DEBUG === "1") {
-    pi.registerCommand("transcribe-onboarding", {
-      description: "Replay pi-transcribe onboarding (debug)",
+  if (process.env.PI_VOICE_DEBUG === "1") {
+    pi.registerCommand("voice-onboarding", {
+      description: "Replay Pi Voice onboarding (debug)",
       handler: async (_args, ctx) => (await loadRuntime()).replayOnboarding(ctx),
     });
   }

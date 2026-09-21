@@ -14,7 +14,7 @@ import {
 } from "./catalog.js";
 import type { CatalogModelActivation } from "./model-activation.js";
 import { ModelSelectionController } from "./model-selection-controller.js";
-import { TranscribeKeys } from "./keybindings.js";
+import { VoiceKeys } from "./keybindings.js";
 import {
   DownloadPanel,
   LIST_PADDING,
@@ -88,7 +88,7 @@ export class RecommendedModelPicker extends Container implements Focusable {
     this._focused = value;
   }
 
-  private readonly keys: TranscribeKeys;
+  private readonly keys: VoiceKeys;
 
   constructor(
     private readonly tui: TUI,
@@ -101,7 +101,7 @@ export class RecommendedModelPicker extends Container implements Focusable {
     options: RecommendedModelPickerOptions = {},
   ) {
     super();
-    this.keys = new TranscribeKeys(keybindings);
+    this.keys = new VoiceKeys(keybindings);
     this.title = options.title ?? "Choose a model";
     this.onboardingStep = options.onboardingStep;
     this.selection = new ModelSelectionController<RecommendedModelResult | undefined>(
@@ -139,7 +139,7 @@ export class RecommendedModelPicker extends Container implements Focusable {
     );
     this.addChild(
       new Text(
-        `${theme.fg("muted", `Your languages: ${languages.map(displayLanguage).join(", ")}`)} · ${this.keys.hint("transcribe.languages.change", "change")}`,
+        `${theme.fg("muted", `Your languages: ${languages.map(displayLanguage).join(", ")}`)} · ${this.keys.hint("voice.languages.change", "change")}`,
         PANEL_PADDING,
         0,
       ),
@@ -334,7 +334,7 @@ export class RecommendedModelPicker extends Container implements Focusable {
     this.body.addChild(new Spacer(1));
     this.body.addChild(
       new Text(
-        `${this.keys.hint("tui.select.confirm", this.confirmLabel())}  ${this.keys.hint("transcribe.recommendations.browseAll", "all models")}  ${this.keys.hint("tui.select.cancel", "back")}`,
+        `${this.keys.hint("tui.select.confirm", this.confirmLabel())}  ${this.keys.hint("voice.recommendations.browseAll", "all models")}  ${this.keys.hint("tui.select.cancel", "back")}`,
         PANEL_PADDING,
         0,
       ),
@@ -405,7 +405,7 @@ export class RecommendedModelPicker extends Container implements Focusable {
     }
     // Collapse whitespace and descriptions before hiding any choices. On tiny
     // terminals window the choices around the cursor, keeping the actions visible.
-    const footer = text(`${this.keys.hint("tui.select.confirm", this.confirmLabel())}  ${this.keys.hint("tui.select.cancel", "back")}\n${this.keys.hint("transcribe.languages.change", "languages")}  ${this.keys.hint("transcribe.recommendations.browseAll", "all models")}`)
+    const footer = text(`${this.keys.hint("tui.select.confirm", this.confirmLabel())}  ${this.keys.hint("tui.select.cancel", "back")}\n${this.keys.hint("voice.languages.change", "languages")}  ${this.keys.hint("voice.recommendations.browseAll", "all models")}`)
       .slice(0, Math.max(0, budget - 1));
     const header = [title, line(this.heading())].slice(0, Math.max(0, budget - footer.length - 1));
     const rows = this.rows();
@@ -439,9 +439,9 @@ export class RecommendedModelPicker extends Container implements Focusable {
       }
       return;
     }
-    // Tab policy: see TRANSCRIBE_KEYBINDINGS. Activation stays an explicit Enter.
-    if (this.keys.matches(data, "transcribe.languages.continue")) return;
-    if (this.keys.matches(data, "transcribe.languages.change")) {
+    // Tab policy: see VOICE_KEYBINDINGS. Activation stays an explicit Enter.
+    if (this.keys.matches(data, "voice.languages.continue")) return;
+    if (this.keys.matches(data, "voice.languages.change")) {
       this.selection.requestExit({ type: "change-languages" });
       return;
     }
@@ -460,7 +460,7 @@ export class RecommendedModelPicker extends Container implements Focusable {
       this.refresh();
       return;
     }
-    if (this.keys.matches(data, "transcribe.recommendations.browseAll")) {
+    if (this.keys.matches(data, "voice.recommendations.browseAll")) {
       this.selection.requestExit({ type: "other-models" });
       return;
     }

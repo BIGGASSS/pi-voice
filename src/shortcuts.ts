@@ -14,7 +14,7 @@ import {
   displayShortcut,
   normalizeShortcut,
 } from "./shortcut-core.js";
-import { TranscribeKeys } from "./keybindings.js";
+import { VoiceKeys } from "./keybindings.js";
 import { panelBorder } from "./ui-components.js";
 
 type UiTheme = ExtensionContext["ui"]["theme"];
@@ -47,7 +47,7 @@ export function createShortcutPicker(
   current: string,
   done: (shortcut: string | undefined) => void,
 ): Component {
-  const keys = new TranscribeKeys(keybindings);
+  const keys = new VoiceKeys(keybindings);
   let phase: Phase = { kind: "waiting" };
   const container = new Container();
 
@@ -82,7 +82,7 @@ export function createShortcutPicker(
       container.addChild(new Spacer(1));
       container.addChild(
         new Text(
-          `${keys.hint("tui.select.confirm", "keep")}  ${keys.hint("transcribe.shortcut.useDefault", "default")}  ${theme.fg("dim", "press another shortcut to replace")}  ${keys.hint("tui.select.cancel", "back")}`,
+          `${keys.hint("tui.select.confirm", "keep")}  ${keys.hint("voice.shortcut.useDefault", "default")}  ${theme.fg("dim", "press another shortcut to replace")}  ${keys.hint("tui.select.cancel", "back")}`,
           1,
           0,
         ),
@@ -98,7 +98,7 @@ export function createShortcutPicker(
       container.addChild(new Spacer(1));
       container.addChild(
         new Text(
-          `${keys.hint("transcribe.shortcut.useDefault", `default (${displayShortcut(DEFAULT_SHORTCUT)})`)}  ${keys.hint("tui.select.cancel", "back")}`,
+          `${keys.hint("voice.shortcut.useDefault", `default (${displayShortcut(DEFAULT_SHORTCUT)})`)}  ${keys.hint("tui.select.cancel", "back")}`,
           1,
           0,
         ),
@@ -129,7 +129,7 @@ export function createShortcutPicker(
         return;
       }
 
-      if (keys.matches(data, "transcribe.shortcut.useDefault")) {
+      if (keys.matches(data, "voice.shortcut.useDefault")) {
         phase = {
           kind: "preview",
           normalized: DEFAULT_SHORTCUT,

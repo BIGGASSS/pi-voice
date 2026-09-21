@@ -6,8 +6,17 @@ const BYTES_PER_SAMPLE = Float32Array.BYTES_PER_ELEMENT;
 const MAX_DECODED_BYTES = 128 * 1024 * 1024;
 const MAX_STDERR_CHARS = 8 * 1024;
 
-function ffmpegExecutable(): string {
-  return process.env.PI_TRANSCRIBE_FFMPEG_PATH?.trim() || "ffmpeg";
+type FfmpegConfiguration = {
+  executable: string;
+  variable?: "PI_VOICE_FFMPEG_PATH" | "PI_TRANSCRIBE_FFMPEG_PATH";
+};
+
+function ffmpegConfiguration(): FfmpegConfiguration {
+  const current = process.env.PI_VOICE_FFMPEG_PATH?.trim();
+  if (current) return { executable: current, variable: "PI_VOICE_FFMPEG_PATH" };
+  const legacy = process.env.PI_TRANSCRIBE_FFMPEG_PATH?.trim();
+  if (legacy) return { executable: legacy, variable: "PI_TRANSCRIBE_FFMPEG_PATH" };
+  return { executable: "ffmpeg" };
 }
 
 function installHint(): string {
@@ -21,10 +30,9 @@ function installHint(): string {
   }
 }
 
-function missingFfmpegError(executable: string): Error {
-  const configured = process.env.PI_TRANSCRIBE_FFMPEG_PATH?.trim();
-  const locationHelp = configured
-    ? `The configured PI_TRANSCRIBE_FFMPEG_PATH (${configured}) could not be found. Correct it or unset it to use PATH.`
+function missingFfmpegError(configuration: FfmpegConfiguration): Error {
+  const locationHelp = configuration.variable
+    ? `The configured ${configuration.variable} (${configuration.executable}) could not be found. Correct it or unset it to use PATH.`
     : "The ffmpeg executable was not found on PATH.";
   return new Error(
     [
@@ -53,7 +61,8 @@ export async function decodeFileAudio(
   signal?: AbortSignal,
 ): Promise<DecodedFileAudio> {
   signal?.throwIfAborted();
-  const executable = ffmpegExecutable();
+  const configuration = ffmpegConfiguration();
+  const executable = configuration.executable;
   const child = spawn(
     executable,
     [
@@ -116,7 +125,7 @@ export async function decodeFileAudio(
     child.once("error", (error: NodeJS.ErrnoException) => {
       terminalError =
         error.code === "ENOENT"
-          ? missingFfmpegError(executable)
+          ? missingFfmpegError(configuration)
           : new Error(`Could not start FFmpeg (${executable}): ${error.message}`);
     });
 
