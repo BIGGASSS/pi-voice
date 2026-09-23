@@ -8,7 +8,13 @@ export type DictationCapture = {
   start(): void;
   stop(): Promise<{ pcm: Float32Array }>;
 };
-export type DictationResult = { text: string; speechSeconds: number; transcribeSeconds: number };
+export type DictationResult = {
+  text: string;
+  /** Unmodified ASR output, retained only when post-processing was attempted. */
+  originalText?: string;
+  speechSeconds: number;
+  transcribeSeconds: number;
+};
 export type DictationState =
   | { phase: "idle" | "ready" | "starting" | "listening" | "transcribing" | "post-processing" | "cancelling" | "disposed" }
   | { phase: "result"; result: DictationResult }
@@ -160,13 +166,16 @@ export class DictationController {
       if (this.disposed || this.take !== take || take.abort.signal.aborted) return undefined;
       // Keep the ASR timing separate: Try It uses it to judge local model speed.
       const transcribeSeconds = Math.max(0, (this.now() - stoppedAt) / 1000);
+      let originalText: string | undefined;
       if (text.trim() && take.settings.postProcessing.enabled && this.options.postProcess) {
+        originalText = text;
         this.setState({ phase: "post-processing" });
         text = await this.options.postProcess(text, take.settings, take.abort.signal);
         if (this.disposed || this.take !== take || take.abort.signal.aborted) return undefined;
       }
       const result = {
         text,
+        ...(originalText !== undefined ? { originalText } : {}),
         speechSeconds: pcm.length / CAPTURE_SAMPLE_RATE,
         transcribeSeconds,
       };

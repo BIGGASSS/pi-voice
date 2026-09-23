@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { initTheme } from "@earendil-works/pi-coding-agent";
+import { visibleWidth } from "@earendil-works/pi-tui";
 import { Deferred } from "../src/deferred.js";
 import type { DictationControllerOptions } from "../src/dictation-controller.js";
 import { settingsForModel } from "../src/settings.js";
@@ -63,7 +64,7 @@ test("speed nudge ignores takes that are too short to judge", () => {
   assert.equal(needsFasterModel(30, 0.3), false);
 });
 
-test("Try It shows Correcting transcript, stays busy, and only previews the final correction", async (t) => {
+test("Try It stays busy during correction, then previews final and original transcripts", async (t) => {
   const correction = new Deferred<string>();
   const h = harness(() => correction.promise);
   t.after(async () => { correction.resolve("cleanup"); await h.pane.dispose(); });
@@ -86,9 +87,32 @@ test("Try It shows Correcting transcript, stays busy, and only previews the fina
   assert.match(result, /Corrected transcript only\./);
   assert.match(result, /Transcribed 10\.0s of audio in 1\.0s/);
   assert.match(result, /looks good/);
-  assert.doesNotMatch(result, /Correcting transcript|raw uncorrected transcript|Slow on this machine/);
+  assert.match(result, /Final transcript:/);
+  assert.match(result, /Original ASR transcript:/);
+  assert.match(result, /raw uncorrected transcript/);
+  assert.doesNotMatch(result, /Correcting transcript…|Slow on this machine/);
   h.pane.handleInput("\r");
   assert.deepEqual(h.results, [{ action: "done" }]);
+});
+
+test("long original transcripts remain scrollable without overflowing the Try It pane", async (t) => {
+  const h = harness(async () => "Short corrected text.");
+  t.after(() => h.pane.dispose());
+  const original = Array.from({ length: 40 }, (_, i) => `Original line ${i + 1} 中文`).join("\n");
+  await recordAndTranscribe(h, original);
+  const top = h.render();
+  assert.match(top, /Final transcript:/);
+  assert.match(top, /Original ASR transcript:/);
+  assert.match(top, /Original line 1 中文/);
+  assert.doesNotMatch(top, /Original line 40/);
+  h.pane.handleInput("\x1b[F"); // End
+  assert.match(h.render(), /Original line 40 中文/);
+  const narrow = h.pane.render(40);
+  assert.ok(narrow.length <= 30);
+  assert.ok(narrow.every((line) => visibleWidth(line) <= 40));
+  h.pane.handleInput("\x1b[H"); // Home
+  assert.match(h.render(), /Final transcript:/);
+  assert.deepEqual(h.results, []);
 });
 
 test("Escape during correction aborts the take instead of leaving or showing raw text", async (t) => {
@@ -145,7 +169,7 @@ for (const [label, text, enabled] of [["disabled", "uncorrected output", false],
     t.after(() => h.pane.dispose());
     await recordAndTranscribe(h, text);
     assert.equal(calls, 0);
-    assert.doesNotMatch(h.render(), /Correcting transcript|unexpected correction/);
+    assert.doesNotMatch(h.render(), /Correcting transcript|unexpected correction|Original ASR transcript|Final transcript:/);
     assert.match(h.render(), enabled ? /No speech detected/ : /uncorrected output/);
     h.pane.handleInput(ESC);
     assert.deepEqual(h.results, [{ action: "done" }]);

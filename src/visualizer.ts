@@ -1,5 +1,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { CAPTURE_SAMPLE_RATE } from "./audio-constants.js";
+import type { DictationResult } from "./dictation-controller.js";
 import { STATUS_WIDGET_KEY } from "./shortcut-core.js";
 
 type UiTheme = ExtensionContext["ui"]["theme"];
@@ -123,6 +124,18 @@ export function showTranscribeStatus(
   const theme = ctx.ui.theme;
   const hint = options?.cancelKeys ? `  ${theme.fg("dim", `${options.cancelKeys} to cancel`)}` : "";
   ctx.ui.setWidget(WIDGET_KEY, [`${theme.fg("muted", text)}${hint}`]);
+}
+
+/** Paste only the final text; the original is UI-only, not a model message. */
+export function showDictationResult(ctx: ExtensionContext, result: DictationResult): void {
+  if (!ctx.hasUI) return;
+  ctx.ui.pasteToEditor(result.text);
+  if (result.originalText !== undefined) {
+    // Notifications appear in the chat area, separate from the editable result.
+    // Unlike the completion widget, this is not cleared by our five-second timer.
+    ctx.ui.notify(`Original ASR transcript:\n${result.originalText}`, "info");
+  }
+  showTranscribeStatus(ctx, formatTranscriptionSummary(result.speechSeconds, result.transcribeSeconds));
 }
 
 export function clearTranscribeWidget(ctx: ExtensionContext): void {

@@ -231,13 +231,14 @@ test("correction delays the result but not the reported ASR timing or PCM durati
   assert.equal(calls.length, 0);
   h.time(61_500);
   const reservation = h.service.reservations[0]!;
-  reservation.result.resolve("raw asr transcript");
+  const originalText = "  raw asr transcript\n第二行  ";
+  reservation.result.resolve(originalText);
   await nextTurn();
   assert.equal(h.controller.state.phase, "post-processing");
   assert.equal(settled, false);
   assert.equal(h.states.some((state) => state.phase === "result"), false);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0]![0], "raw asr transcript");
+  assert.equal(calls[0]![0], originalText);
   assert.equal(calls[0]![1], correctionSettings);
   assert.equal(calls[0]![2], reservation.signal);
   assert.equal(calls[0]![2].aborted, false);
@@ -255,11 +256,11 @@ test("correction delays the result but not the reported ASR timing or PCM durati
   h.time(90_000);
   correction.resolve("Corrected transcript.");
   assert.deepEqual(await submission, {
-    text: "Corrected transcript.", speechSeconds: 1, transcribeSeconds: 1.5,
+    text: "Corrected transcript.", originalText, speechSeconds: 1, transcribeSeconds: 1.5,
   });
   assert.deepEqual(h.states.filter((state) => state.phase === "result"), [{
     phase: "result",
-    result: { text: "Corrected transcript.", speechSeconds: 1, transcribeSeconds: 1.5 },
+    result: { text: "Corrected transcript.", originalText, speechSeconds: 1, transcribeSeconds: 1.5 },
   }]);
   assert.deepEqual(h.states.slice(-3).map((state) => state.phase), ["transcribing", "post-processing", "result"]);
 });
@@ -333,7 +334,9 @@ for (const [label, takeSettings, text] of [
     await h.controller.start(takeSettings);
     const submission = h.controller.stop();
     h.service.reservations[0]!.result.resolve(text);
-    assert.equal((await submission)?.text, text);
+    const result = await submission;
+    assert.equal(result?.text, text);
+    assert.equal(result?.originalText, undefined);
     assert.equal(calls, 0);
     assert.equal(h.states.some((state) => state.phase === "post-processing"), false);
     await h.controller.dispose();
@@ -347,6 +350,18 @@ test("enabled correction without an injected processor still returns the ASR tra
   h.service.reservations[0]!.result.resolve("original transcript");
   assert.equal((await submission)?.text, "original transcript");
   assert.equal(h.states.some((state) => state.phase === "post-processing"), false);
+  await h.controller.dispose();
+});
+
+test("unchanged or fallback corrections still retain the original for comparison", async () => {
+  const h = harness(async (text) => text);
+  await h.controller.start(correctionSettings);
+  const submission = h.controller.stop();
+  const originalText = "  original ASR text\nwith whitespace  ";
+  h.service.reservations[0]!.result.resolve(originalText);
+  const result = await submission;
+  assert.equal(result?.text, originalText);
+  assert.equal(result?.originalText, originalText);
   await h.controller.dispose();
 });
 

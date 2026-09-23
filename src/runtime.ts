@@ -253,7 +253,7 @@ export function createPiVoiceRuntime(
   async function stopAndTranscribe(ctx: ExtensionContext): Promise<void> {
     const {
       clearTranscribeWidget,
-      formatTranscriptionSummary,
+      showDictationResult,
       showTranscribeStatus,
     } = await loadVisualizer();
     const active = recording!;
@@ -268,11 +268,7 @@ export function createPiVoiceRuntime(
       if (!result) {
         await reportDictationError(ctx, active.dictation);
       } else if (result.text) {
-        ctx.ui.pasteToEditor(result.text);
-        showTranscribeStatus(
-          ctx,
-          formatTranscriptionSummary(result.speechSeconds, result.transcribeSeconds),
-        );
+        showDictationResult(ctx, result);
         keepCompletionVisible = true;
       } else {
         ctx.ui.notify(`No speech detected in ${result.speechSeconds.toFixed(1)}s of audio`, "warning");

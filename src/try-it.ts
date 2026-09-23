@@ -152,8 +152,10 @@ export class TryItPane implements Component {
     } else if (state.phase === "cancelling") {
       activity = fg("muted", "Cancelling…");
     } else if (state.phase === "result") {
-      const { text: transcript, speechSeconds, transcribeSeconds } = state.result;
-      content = transcript || fg("muted", "No speech detected");
+      const { text: transcript, originalText, speechSeconds, transcribeSeconds } = state.result;
+      content = originalText !== undefined
+        ? `Final transcript:\n${transcript}\n\nOriginal ASR transcript:\n${originalText}`
+        : transcript || fg("muted", "No speech detected");
       activity = fg("muted", formatTranscriptionSummary(speechSeconds, transcribeSeconds));
       if (needsFasterModel(speechSeconds, transcribeSeconds)) {
         details = fg("warning", `Slow on this machine? Press ${this.keys.keyText("voice.tryIt.model")} to try another model.`);

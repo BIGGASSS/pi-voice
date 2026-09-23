@@ -53,7 +53,7 @@ LLM post-processing is **off by default**. In `/voice-settings` → **Post-proce
 
 The default prompt conservatively fixes ASR typos and punctuation, preserving meaning and the original language. It tells the LLM not to answer or execute dictated commands and to return only the corrected transcript. Use **Edit correction prompt** to edit the full prompt, or **Reset correction prompt** to restore the default. Review corrected text before submitting it: LLMs can make mistakes.
 
-Correction runs after ASR finishes and before text is pasted into the editor. `Esc` cancels both stages. If the LLM is unavailable, fails, returns empty/incomplete output, or takes longer than 30 seconds, Pi Voice warns and keeps the original ASR transcript instead.
+Correction runs after ASR finishes and before text is pasted into the editor. Afterward, the original ASR transcript is shown separately in the chat area for comparison; only the final text is inserted into the editor. The original is UI-only and is not added to the model conversation. The Try it preview shows both versions as well. `Esc` cancels both stages. If the LLM is unavailable, fails, returns empty/incomplete output, or takes longer than 30 seconds, Pi Voice warns and keeps the original ASR transcript instead.
 
 Changes save immediately in Pi's agent settings directory (`~/.pi/agent/pi-voice.json` by default). The chosen LLM and prompt are retained when correction is disabled or the local ASR model is changed. Older configurations remain disabled until you opt in.
 
