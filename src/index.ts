@@ -1,6 +1,11 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { existsSync } from "node:fs";
 import { registerFileTranscriptionTool } from "./file-transcription.js";
+import {
+  claimLegacyGitNotice,
+  findLegacyGitInstall,
+  legacyGitMigrationMessage,
+} from "./install-migration.js";
 import type { PiVoiceRuntime } from "./runtime.js";
 import { displayShortcut, STATUS_WIDGET_KEY } from "./shortcut-core.js";
 import { legacySettingsPath, settingsPath } from "./settings-path.js";
@@ -27,8 +32,21 @@ export default function piVoice(pi: ExtensionAPI): void {
     return loading;
   }
 
-  pi.on("session_start", (_event, ctx) => {
-    if (!existsSync(settingsPath()) && !existsSync(legacySettingsPath())) {
+  pi.on("session_start", async (_event, ctx) => {
+    let showedMigrationNotice = false;
+    if (ctx.mode === "tui") {
+      const legacyInstall = findLegacyGitInstall(pi.getCommands());
+      if (legacyInstall && await claimLegacyGitNotice()) {
+        ctx.ui.notify(legacyGitMigrationMessage(legacyInstall), "warning");
+        showedMigrationNotice = true;
+      }
+    }
+
+    if (
+      !showedMigrationNotice &&
+      !existsSync(settingsPath()) &&
+      !existsSync(legacySettingsPath())
+    ) {
       ctx.ui.notify(
         `Pi Voice installed · press ${displayShortcut(registeredShortcut)} or run /voice-settings to set up`,
         "info",
