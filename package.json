@@ -1,7 +1,7 @@
 {
   "name": "@earendil-works/pi-voice",
   "version": "0.1.0",
-  "description": "Local voice dictation and speech-to-text for Pi",
+  "description": "Local speech-to-text for Pi",
   "type": "module",
   "license": "MIT",
   "repository": {

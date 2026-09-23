@@ -1,19 +1,21 @@
 # Pi Voice
 
-Local voice dictation and speech-to-text for Pi.
+Local speech-to-text for Pi.
+
+Press a keyboard shortcut, talk, and the resulting transcript will be put directly into your chat.
 
 ## Install
 
-Install directly from GitHub:
-
-```bash
-pi install ssh://git@github.com/earendil-works/pi-voice
-```
-
-Or install the published npm package:
+Install the npm package:
 
 ```bash
 pi install npm:@earendil-works/pi-voice
+```
+
+If you prefer being on the development tip, you can install from GitHub:
+
+```bash
+pi install ssh://git@github.com/earendil-works/pi-voice
 ```
 
 ## Usage
@@ -26,38 +28,23 @@ The extension registers:
 
 `/transcribe` remains available as a compatibility alias for `/voice-settings`. The `/voice` command is reserved for a future voice mode.
 
-To develop or run it from a checkout:
-
-```bash
-npm install --ignore-scripts
-pi -e /absolute/path/to/pi-voice
-```
-
-While iterating on setup, enable the debug-only onboarding command when starting Pi:
-
-```bash
-PI_VOICE_DEBUG=1 pi -e /absolute/path/to/pi-voice
-```
-
-Then run `/voice-onboarding` to replay the complete onboarding flow. The command is not registered unless `PI_VOICE_DEBUG=1`. Canceling before selecting a model leaves the current configuration unchanged; model selections are applied immediately.
-
-Press the shortcut while Pi has focus, speak, then press it again. A live level meter appears above the editor while recording. `Esc` cancels. Audio is transcribed locally and inserted at the editor cursor. Streaming-capable models process roughly 500 ms audio chunks while recording; other models use the complete recording after it stops. The shortcut is a Pi terminal binding, not a global OS hotkey.
-
 ## Upgrading from pi-transcribe
 
-Existing Git installs keep working: GitHub redirects the old repository URL, so `pi update --extensions` updates them to the Pi Voice code. Settings in `pi-transcribe.json` are migrated automatically to `pi-voice.json` the first time they are read, and custom `transcribe.*` keybindings in `keybindings.json` still apply until you rename them to `voice.*`.
-
-To reinstall under the new name, remove the old package first so Pi does not load both copies of the extension:
+It's recommended to install Pi Voice via NPM. If you have an older install of pi-transcribe uninstall it via: 
 
 ```bash
 pi remove git:github.com/earendil-works/pi-transcribe
 ```
 
-If you installed it into a project with `-l`, run `pi remove -l git:github.com/earendil-works/pi-transcribe` from that project instead. Then install Pi Voice with either command above. Your settings are kept.
+If you installed it into a project with `-l`, run `pi remove -l git:github.com/earendil-works/pi-transcribe` from that project instead. Then install Pi Voice with:
+
+```bash
+pi install npm:@earendil-works/pi-voice
+```
 
 ## File transcription and FFmpeg
 
-The agent can call `transcribe_file` for local audio or video files. Transcription jobs share one loaded model; queued files reuse it, while microphone dictation runs before waiting file jobs after any active job finishes. To bound memory use, at most two file operations are admitted at once, only one FFmpeg decoder runs at a time, and decoded audio is limited to 128 MiB (about 35 minutes). File decoding requires the `ffmpeg` executable; microphone dictation does not. Install FFmpeg with your system package manager:
+The agent can call `transcribe_file` for local audio or video files. Decoded audio is limited to 128 MiB (about 35 minutes). File decoding requires the `ffmpeg` executable. Install FFmpeg with your system package manager if you don't already have it installed
 
 ```bash
 # macOS with Homebrew
@@ -79,3 +66,21 @@ export PI_VOICE_FFMPEG_PATH=/path/to/ffmpeg
 The legacy `PI_TRANSCRIBE_FFMPEG_PATH` variable remains supported when `PI_VOICE_FFMPEG_PATH` is not set.
 
 When FFmpeg is unavailable, `transcribe_file` reports platform-specific guidance to the agent. The agent should ask before running a package-manager command. Model setup is still explicit: run `/voice-settings` once in the interactive TUI to choose and, after confirmation, download a local model.
+
+## Developing & Building Pi Voice
+
+To develop or run it from a checkout:
+
+```bash
+git clone git@github.com:earendil-works/pi-voice.git
+cd pi-voice
+npm install --ignore-scripts
+pi -e .
+```
+
+If you want to be able to re-run onboarding you can enable the debug env var when starting Pi. This enables the `/voice-onboarding` command.
+
+```bash
+PI_VOICE_DEBUG=1 pi -e /absolute/path/to/pi-voice
+```
+
