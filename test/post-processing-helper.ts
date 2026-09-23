@@ -8,6 +8,11 @@ import type { Component } from "@earendil-works/pi-tui";
 import { Deferred } from "../src/deferred.js";
 import { keybindings, testTheme, testTui } from "./ui-helpers.js";
 
+type MenuModel = Pick<
+  ReturnType<ExtensionContext["modelRegistry"]["getAvailable"]>[number],
+  "provider" | "id" | "name" | "reasoning" | "thinkingLevelMap"
+>;
+
 type Step =
   | { type: "custom"; run: (pane: Component, done: (value: unknown) => void) => void | Promise<void> }
   | { type: "confirm"; run: (title: string, message: string) => boolean }
@@ -15,9 +20,9 @@ type Step =
 
 export function scriptedSettingsContext(
   steps: Step[],
-  models = [
-    { provider: "provider-a", id: "correction-model", name: "Correction LLM" },
-    { provider: "provider-b", id: "other-model", name: "Other LLM" },
+  models: MenuModel[] = [
+    { provider: "provider-a", id: "correction-model", name: "Correction LLM", reasoning: true },
+    { provider: "provider-b", id: "other-model", name: "Other LLM", reasoning: true },
   ],
 ) {
   let index = 0;

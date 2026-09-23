@@ -14,6 +14,7 @@ const correctionSettings = {
   postProcessing: {
     ...settings.postProcessing,
     enabled: true,
+    reasoning: "low" as const,
     model: { provider: "local-correction", id: "dedicated-llm" },
   },
 };

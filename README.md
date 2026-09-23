@@ -47,7 +47,7 @@ Press the shortcut while Pi has focus, speak, then press it again. A live level 
 
 ## Optional transcript correction
 
-LLM post-processing is **off by default**. In `/voice-settings` → **Post-processing**, choose a specific LLM from your available Pi providers, then enable correction. This selection is independent of—and never changes—the main session model.
+LLM post-processing is **off by default**. In `/voice-settings` → **Post-processing**, choose a specific reasoning-capable LLM from your available Pi providers and a **Reasoning level**, then enable correction. An explicit non-off reasoning level is required: there is no implicit default or inherited session level. The picker offers only levels supported by the chosen model (`minimal`, `low`, `medium`, `high`, and, where supported, `xhigh` or `max`). These selections are independent of—and never change—the main session model or thinking level.
 
 **When enabled, transcript text is sent to the chosen provider and may cost money.** Audio transcription still runs locally. Leave post-processing disabled to keep Pi Voice from sending transcripts to an LLM.
 
@@ -55,7 +55,9 @@ The default prompt conservatively fixes ASR typos and punctuation, preserving me
 
 Correction runs after ASR finishes and before text is pasted into the editor. Afterward, the original ASR transcript is shown separately in the chat area for comparison; only the final text is inserted into the editor. The original is UI-only and is not added to the model conversation. The Try it preview shows both versions as well. `Esc` cancels both stages. If the LLM is unavailable, fails, returns empty/incomplete output, or takes longer than 30 seconds, Pi Voice warns and keeps the original ASR transcript instead.
 
-Changes save immediately in Pi's agent settings directory (`~/.pi/agent/pi-voice.json` by default). The chosen LLM and prompt are retained when correction is disabled or the local ASR model is changed. Older configurations remain disabled until you opt in.
+Higher reasoning levels can increase latency and cost; correction still has the same 30-second timeout. Switching correction models preserves a supported reasoning level. If the level is incompatible, an enabled configuration requires you to choose a new level before saving the switch; while disabled, the level is cleared and must be chosen before enabling. Canceling enable or an enabled model switch leaves the previous configuration unchanged.
+
+Changes save immediately in Pi's agent settings directory (`~/.pi/agent/pi-voice.json` by default). The chosen LLM, reasoning level, and prompt are retained when correction is disabled or the local ASR model is changed. Existing enabled configurations without a valid explicit reasoning level load disabled with a warning, preserving the model and prompt: choose **Reasoning level** and re-enable correction. Other older configurations remain disabled until you opt in.
 
 ## Developing & Building Pi Voice
 

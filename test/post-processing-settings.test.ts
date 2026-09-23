@@ -23,6 +23,7 @@ initTheme("dark");
 
 const correction: PostProcessingSettings = {
   enabled: true,
+  reasoning: "low",
   model: { provider: "provider-a", id: "correction-model" },
   prompt: "  Fix ASR errors only.\nKeep the original language.  ",
 };

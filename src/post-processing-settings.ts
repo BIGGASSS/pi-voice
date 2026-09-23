@@ -1,6 +1,15 @@
+import {
+  isPostProcessingReasoningLevel,
+  type PostProcessingReasoningLevel,
+} from "./post-processing-reasoning.js";
+
+export type { PostProcessingReasoningLevel } from "./post-processing-reasoning.js";
+
 export type PostProcessingSettings = {
   enabled: boolean;
   model?: { provider: string; id: string };
+  /** Unset only before configuration; a non-off level is required to enable correction. */
+  reasoning?: PostProcessingReasoningLevel;
   prompt: string;
 };
 
@@ -46,9 +55,13 @@ export function validatePostProcessingSettings(value: unknown): PostProcessingSe
   }
   if (value.enabled && !model) return defaultPostProcessingSettings();
 
+  const reasoning = isPostProcessingReasoningLevel(value.reasoning) ? value.reasoning : undefined;
   return {
-    enabled: value.enabled,
+    // Do not choose an implicit default for old or malformed configurations.
+    // Keep the user's model and prompt so only the missing selection needs repair.
+    enabled: value.enabled && reasoning !== undefined,
     ...(model ? { model } : {}),
+    ...(reasoning ? { reasoning } : {}),
     prompt: value.prompt,
   };
 }

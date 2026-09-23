@@ -1,6 +1,11 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { DictationControllerOptions } from "./dictation-controller.js";
 import type { PostProcessingSettings } from "./settings.js";
+import {
+  isPostProcessingReasoningLevel,
+  supportedPostProcessingReasoningLevels,
+  type PostProcessingReasoningLevel,
+} from "./post-processing-reasoning.js";
 
 type ModelRegistry = ExtensionContext["modelRegistry"];
 type Provider = NonNullable<ReturnType<ModelRegistry["getProvider"]>>;
@@ -19,8 +24,9 @@ async function correctTranscript(
   model: Model,
   context: ModelContext,
   signal: AbortSignal,
+  reasoning: PostProcessingReasoningLevel,
 ) {
-  const options = { signal, cacheRetention: "none" as const, maxRetries: 0 };
+  const options = { signal, reasoning, cacheRetention: "none" as const, maxRetries: 0 };
   // Current Pi resolves auth and configured/custom providers at request time.
   const streamingRegistry: ModelRegistry & Partial<Pick<Provider, "streamSimple">> = registry;
   if (streamingRegistry.streamSimple) {
@@ -73,11 +79,18 @@ export async function postProcessTranscript(
       if (!selected) throw new Error("Choose a post-processing LLM in /voice-settings");
       const model = registry.find(selected.provider, selected.id);
       if (!model) throw new Error("The selected post-processing LLM is unavailable");
+      const reasoning = settings.reasoning;
+      if (!isPostProcessingReasoningLevel(reasoning)) {
+        throw new Error("Choose a required reasoning level in /voice-settings → Post-processing");
+      }
+      if (!supportedPostProcessingReasoningLevels(model).includes(reasoning)) {
+        throw new Error(`The selected LLM does not support reasoning level '${reasoning}'; choose a supported level in /voice-settings → Post-processing`);
+      }
       const response = await correctTranscript(registry, model, {
         systemPrompt: settings.prompt,
         // No session history, editor contents, tools, or audio are sent.
         messages: [{ role: "user", content: text, timestamp: Date.now() }],
-      }, request.signal);
+      }, request.signal, reasoning);
       request.signal.throwIfAborted();
       if (response.stopReason !== "stop") {
         throw new Error(`Correction did not finish (${response.stopReason})`);

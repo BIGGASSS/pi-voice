@@ -22,7 +22,7 @@ function harness(postProcess: DictationControllerOptions["postProcess"], enabled
   const settings = settingsForModel("parakeet-unified-en-0.6b", "/tmp/try-it-model", {
     shortcut: "ctrl+g",
     postProcessing: {
-      enabled, model: { provider: "test-correction", id: "dedicated-llm" },
+      enabled, reasoning: "low", model: { provider: "test-correction", id: "dedicated-llm" },
       prompt: "Conservatively correct this transcript.",
     },
   });

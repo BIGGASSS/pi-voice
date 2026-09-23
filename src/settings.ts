@@ -15,6 +15,7 @@ import {
 export {
   DEFAULT_POST_PROCESSING_PROMPT,
   defaultPostProcessingSettings,
+  type PostProcessingReasoningLevel,
   type PostProcessingSettings,
 } from "./post-processing-settings.js";
 
@@ -164,9 +165,19 @@ async function readSettingsFile(path: string): Promise<SettingsReadResult> {
   try {
     const parsed: unknown = JSON.parse(await readFile(path, "utf8"));
     const settings = validateSettings(parsed);
-    return settings
-      ? { settings }
-      : { warning: `Invalid settings in ${path}; configuration is required.` };
+    if (!settings) return { warning: `Invalid settings in ${path}; configuration is required.` };
+    const needsReasoning =
+      isObject(parsed) &&
+      isObject(parsed.postProcessing) &&
+      parsed.postProcessing.enabled === true &&
+      settings.postProcessing.model !== undefined &&
+      settings.postProcessing.reasoning === undefined;
+    return {
+      settings,
+      ...(needsReasoning ? {
+        warning: "Post-processing is disabled: choose a required reasoning level in /voice-settings → Post-processing, then enable it again. Your model and prompt have been kept.",
+      } : {}),
+    };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
     return {
@@ -189,7 +200,7 @@ export async function readSettings(): Promise<SettingsReadResult> {
     await unlink(legacyPath).catch((error: NodeJS.ErrnoException) => {
       if (error.code !== "ENOENT") throw error;
     });
-    return { settings: legacy.settings };
+    return legacy;
   } catch (error) {
     return {
       settings: legacy.settings,

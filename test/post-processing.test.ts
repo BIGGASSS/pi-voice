@@ -29,6 +29,7 @@ const model: Model = {
 };
 const settings: PostProcessingSettings = {
   enabled: true,
+  reasoning: "low",
   model: { provider: model.provider, id: model.id },
   prompt: "Only fix transcription errors. Preserve the original language.\nReturn only corrected text.",
 };
@@ -126,6 +127,7 @@ for (const api of ["provider", "registry"] as const) {
     assert.equal(options.signal.aborted, false);
     assert.equal(options.cacheRetention, "none");
     assert.equal(options.maxRetries, 0);
+    assert.equal(options.reasoning, "low");
     assert.equal(options.sessionId, undefined);
     assert.deepEqual(h.warnings, []);
     assert.deepEqual(h.providerLookups, api === "provider" ? [model.provider] : []);
@@ -202,6 +204,49 @@ for (const api of ["provider", "registry"] as const) {
   }
 }
 
+for (const api of ["provider", "registry"] as const) {
+  for (const reasoning of ["minimal", "low", "medium", "high", "xhigh", "max"] as const) {
+    test(`${api} API explicitly forwards selected ${reasoning} reasoning`, async () => {
+      const h = new FakeRegistry(api);
+      h.selected = { ...model, thinkingLevelMap: { xhigh: "xhigh", max: "max" } };
+      assert.equal(await h.process(raw, { reasoning }), "Bonjour le monde.");
+      assert.equal(h.requests.length, 1);
+      assert.equal(h.requests[0]![2]!.reasoning, reasoning);
+      assert.deepEqual(h.warnings, []);
+    });
+  }
+
+  for (const reasoning of [undefined, null, "off", "default", "auto", "HIGH", "", 42]) {
+    test(`${api} API refuses missing or invalid required reasoning (${String(reasoning)})`, async () => {
+      const h = new FakeRegistry(api);
+      assert.equal(await h.process(raw, { reasoning: reasoning as PostProcessingSettings["reasoning"] }), raw);
+      assert.deepEqual(h.authModels, []);
+      assert.deepEqual(h.requests, []);
+      h.assertFallback(/Choose a required reasoning level/);
+    });
+  }
+
+  test(`${api} API rejects non-reasoning models and unsupported levels without silently clamping`, async () => {
+    for (const selected of [
+      { ...model, reasoning: false },
+      { ...model, thinkingLevelMap: { low: null } },
+    ]) {
+      const h = new FakeRegistry(api);
+      h.selected = selected;
+      assert.equal(await h.process(), raw);
+      assert.deepEqual(h.authModels, []);
+      assert.deepEqual(h.requests, []);
+      h.assertFallback(/does not support reasoning level 'low'/);
+    }
+    for (const reasoning of ["xhigh", "max"] as const) {
+      const h = new FakeRegistry(api); // Extended levels require model metadata support.
+      assert.equal(await h.process(raw, { reasoning }), raw);
+      assert.deepEqual(h.requests, []);
+      h.assertFallback(/does not support reasoning level/);
+    }
+  });
+}
+
 const resolvedAuths: Extract<Auth, { ok: true }>[] = [
   { ok: true, apiKey: "resolved-oauth-token", headers: { "X-Custom-Auth": "session-token" }, env: { REGION: "test-region" } },
   { ok: true, headers: { "X-Local": "keyless" }, env: { ENDPOINT: "local" } },
@@ -215,7 +260,7 @@ for (const auth of resolvedAuths) {
     assert.deepEqual(h.authModels, [model]);
     const options = h.requests[0]![2]!;
     assert.deepEqual(options, {
-      signal: options.signal, cacheRetention: "none", maxRetries: 0,
+      signal: options.signal, reasoning: "low", cacheRetention: "none", maxRetries: 0,
       apiKey: "apiKey" in auth ? auth.apiKey : undefined,
       headers: "headers" in auth ? auth.headers : undefined,
       env: "env" in auth ? auth.env : undefined,
@@ -232,7 +277,7 @@ test("modern registry streamSimple owns auth and dispatch without consulting the
   assert.deepEqual(h.providerLookups, []);
   assert.deepEqual(h.authModels, []);
   const options = h.requests[0]![2]!;
-  assert.deepEqual(options, { signal: options.signal, cacheRetention: "none", maxRetries: 0 });
+  assert.deepEqual(options, { signal: options.signal, reasoning: "low", cacheRetention: "none", maxRetries: 0 });
 });
 
 for (const [label, text, overrides] of [
@@ -394,6 +439,7 @@ test("context adapter uses the current registry/settings, never the session mode
   const ctx = {
     modelRegistry: first.registry,
     get model() { return assert.fail("Do not use the active session model"); },
+    get thinkingLevel() { return assert.fail("Do not use the active session thinking level"); },
     get sessionManager() { return assert.fail("Do not read conversation history"); },
     ui: {
       getEditorText: () => assert.fail("Do not read the editor"),
@@ -405,7 +451,7 @@ test("context adapter uses the current registry/settings, never the session mode
   assert.equal(await process(raw, transcriptionSettings, new AbortController().signal), "Bonjour le monde.");
   assert.deepEqual(first.lookups, [[model.provider, model.id]]);
   ctx.modelRegistry = second.registry;
-  const updated = { ...transcriptionSettings, postProcessing: { ...settings, model: second.selected, prompt: "Updated correction prompt" } };
+  const updated = { ...transcriptionSettings, postProcessing: { ...settings, model: second.selected, reasoning: "high" as const, prompt: "Updated correction prompt" } };
   assert.equal(await process("second take", updated, new AbortController().signal), "Bonjour le monde.");
   assert.deepEqual(second.lookups, [[second.selected.provider, second.selected.id]]);
   assert.deepEqual(second.requests[0]![1], {
@@ -413,6 +459,8 @@ test("context adapter uses the current registry/settings, never the session mode
     messages: [{ role: "user", content: "second take", timestamp: second.requests[0]![1].messages[0]!.timestamp }],
   });
   assert.equal(first.requests.length, 1);
+  assert.equal(first.requests[0]![2]!.reasoning, "low");
+  assert.equal(second.requests[0]![2]!.reasoning, "high");
   assert.equal(notifications.length, 0);
   second.streamError = new Error("New registry failed");
   assert.equal(await process(raw, updated, new AbortController().signal), raw);
