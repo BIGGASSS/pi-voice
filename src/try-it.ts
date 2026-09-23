@@ -12,6 +12,7 @@ import { DictationController, type DictationControllerOptions } from "./dictatio
 import { microphoneSummary } from "./microphone-picker.js";
 import { matchesShortcut, VoiceKeys } from "./keybindings.js";
 import { COMFORTABLE_REAL_TIME_FACTOR } from "./recommendations.js";
+import { createTranscriptPostProcessor } from "./post-processing.js";
 import type { TranscribeSettings } from "./settings.js";
 import { displayShortcut } from "./shortcut-core.js";
 import { TranscriptionService } from "./transcription-service.js";
@@ -26,7 +27,7 @@ import {
 
 type UiTheme = ExtensionContext["ui"]["theme"];
 
-type TryItPaneOptions = Pick<DictationControllerOptions, "createCapture" | "now"> & {
+type TryItPaneOptions = Pick<DictationControllerOptions, "createCapture" | "now" | "postProcess"> & {
   /** Shown only before the first recording attempt when macOS has not asked yet. */
   showMacPermissionNote?: boolean;
   /** Checked without holding the previous onboarding pane on screen. */
@@ -82,6 +83,7 @@ export class TryItPane implements Component {
     this.dictation = new DictationController(service, {
       createCapture: options.createCapture,
       now: options.now,
+      postProcess: options.postProcess,
       onChange: () => this.refresh(),
       onFrame: (frame) => {
         this.analyzer.push(frame);
@@ -143,8 +145,8 @@ export class TryItPane implements Component {
       this.dictation.modelState === "loading"
     ) {
       activity = fg("muted", `Loading ${modelName}… You can start recording now.`);
-    } else if (state.phase === "transcribing") {
-      activity = fg("accent", "Transcribing…");
+    } else if (state.phase === "transcribing" || state.phase === "post-processing") {
+      activity = fg("accent", state.phase === "post-processing" ? "Correcting transcript…" : "Transcribing…");
     } else if (state.phase === "starting") {
       activity = fg("muted", "Starting microphone…");
     } else if (state.phase === "cancelling") {
@@ -171,6 +173,7 @@ export class TryItPane implements Component {
       hints = `${rawKeyHint(shortcut, "to transcribe")}  ${this.keys.hint("tui.select.cancel", "to discard")}`;
     } else if (
       state.phase === "transcribing" ||
+      state.phase === "post-processing" ||
       state.phase === "starting" ||
       state.phase === "cancelling"
     ) {
@@ -275,7 +278,7 @@ export class TryItPane implements Component {
       return;
     }
     if (this.keys.matches(data, "tui.select.cancel")) {
-      if (["starting", "listening", "transcribing", "cancelling"].includes(phase)) {
+      if (["starting", "listening", "transcribing", "post-processing", "cancelling"].includes(phase)) {
         void this.dictation.cancel();
       } else {
         this.leave({ action: phase === "result" ? "done" : "skip" });
@@ -317,6 +320,7 @@ export async function tryVoice(ctx: ExtensionContext, settings: TranscribeSettin
     return await ctx.ui.custom<TryItResult>((tui, theme, keybindings, done) =>
       (pane = new TryItPane(tui, theme, keybindings, settings, service, done, {
         createCapture: createMicrophoneCapture,
+        postProcess: createTranscriptPostProcessor(ctx),
         microphonePermission,
       })),
     );

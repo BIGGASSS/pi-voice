@@ -7,6 +7,7 @@ import { getKeybindings } from "@earendil-works/pi-tui";
 import { existsSync } from "node:fs";
 import { DictationController } from "./dictation-controller.js";
 import { VoiceKeys } from "./keybindings.js";
+import { createTranscriptPostProcessor } from "./post-processing.js";
 import type { TranscribeSettings } from "./settings.js";
 import { displayShortcut } from "./shortcut-core.js";
 import { TranscriptionService } from "./transcription-service.js";
@@ -141,6 +142,7 @@ export function createPiVoiceRuntime(
       preferredLanguages: previous.preferredLanguages,
       transcriptionLanguage: previous.transcriptionLanguage,
       chineseOutput: previous.chineseOutput,
+      postProcessing: previous.postProcessing,
       currentModelId: previous.model.id,
       microphone: previous.microphone,
       postActivation: "advance",
@@ -190,7 +192,7 @@ export function createPiVoiceRuntime(
         void runExclusive(ctx, () => cancelRecording(ctx));
         return { consume: true };
       }
-      if (dictation?.state.phase === "transcribing") {
+      if (dictation?.state.phase === "transcribing" || dictation?.state.phase === "post-processing") {
         void dictation.cancel();
         ctx.ui.notify("Transcription cancelled", "info");
         return { consume: true };
@@ -303,13 +305,21 @@ export function createPiVoiceRuntime(
         return;
       }
     }
-    const { RecordingMeter } = await loadVisualizer();
+    const { RecordingMeter, showTranscribeStatus } = await loadVisualizer();
     if (shuttingDown) return;
     const meter = new RecordingMeter();
     const controller = new DictationController(transcriptionService, {
       createCapture: createMicrophoneCapture,
       onFrame: (frame) => meter.push(frame),
-      onChange: () => meter.setModelState(controller.modelState),
+      postProcess: createTranscriptPostProcessor(ctx),
+      onChange: (state) => {
+        meter.setModelState(controller.modelState);
+        if (state.phase === "post-processing") {
+          showTranscribeStatus(ctx, "Correcting transcript…", {
+            cancelKeys: new VoiceKeys(getKeybindings()).keyText("voice.dictation.cancel"),
+          });
+        }
+      },
     });
     dictation = controller;
     try {

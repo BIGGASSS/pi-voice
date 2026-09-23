@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { TranscribeSettings } from "../src/settings.js";
+import { defaultPostProcessingSettings, type TranscribeSettings } from "../src/settings.js";
 import { TranscriptionService } from "../src/transcription-service.js";
 import type {
   DictationStream,
@@ -16,6 +16,7 @@ function settings(modelPath: string): TranscribeSettings {
     preferredLanguages: ["en"],
     transcriptionLanguage: "auto",
     chineseOutput: "simplified",
+    postProcessing: defaultPostProcessingSettings(),
     microphone: { type: "system-default" },
     model: { source: "catalog", id: modelPath, path: modelPath },
   };

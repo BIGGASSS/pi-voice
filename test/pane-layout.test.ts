@@ -11,7 +11,7 @@ import {
 import { ModelRatingsHelp } from "../src/model-ratings-help.js";
 import { VoiceKeys } from "../src/keybindings.js";
 import { RecommendedModelPicker } from "../src/recommendation-picker.js";
-import type { TranscribeSettings } from "../src/settings.js";
+import { defaultPostProcessingSettings, type TranscribeSettings } from "../src/settings.js";
 import { TryItPane } from "../src/try-it.js";
 import { SingleSelectPicker } from "../src/ui-components.js";
 import { isolatedModelCache } from "./model-cache-helper.js";
@@ -26,6 +26,7 @@ const settings: TranscribeSettings = {
   preferredLanguages: ["en"],
   transcriptionLanguage: "en",
   chineseOutput: "simplified",
+  postProcessing: defaultPostProcessingSettings(),
   microphone: { type: "system-default" },
   model: {
     source: "catalog",

@@ -22,6 +22,7 @@ import {
   writeSettings,
   type ChineseOutput,
   type MicrophoneSetting,
+  type PostProcessingSettings,
   type TranscribeSettings,
   type TranscriptionLanguage,
 } from "./settings.js";
@@ -53,6 +54,7 @@ type ModelSelectionOptions = {
   chineseOutput?: ChineseOutput;
   currentModelId?: string;
   microphone?: MicrophoneSetting;
+  postProcessing?: PostProcessingSettings;
   /** Persists language changes made before this flow activates a model. */
   onPreferredLanguagesChange?: (languages: string[]) => Promise<void>;
   postActivation?: CatalogModelPostActivation;
@@ -77,6 +79,7 @@ export async function runModelSelection(
         configured?.transcriptionLanguage ?? options.transcriptionLanguage,
       chineseOutput: configured?.chineseOutput ?? options.chineseOutput,
       microphone: configured?.microphone ?? options.microphone ?? DEFAULT_MICROPHONE,
+      postProcessing: configured?.postProcessing ?? options.postProcessing,
     }),
     (settings) => {
       configured = settings;
@@ -204,6 +207,7 @@ export async function changeOnboardingModel(
       preferredLanguages: languages,
       microphone: current.microphone,
       chineseOutput: current.chineseOutput,
+      postProcessing: current.postProcessing,
     }),
     (settings) => {
       chosen = settings;
@@ -271,7 +275,11 @@ export async function runOnboarding(
     // the real wait on this machine.
     const picks = recommendModels(CATALOG_MODELS, languages);
     const { activate, waitForCommits } = createSettingsActivation(
-      () => ({ shortcut, preferredLanguages: languages }),
+      () => ({
+        shortcut,
+        preferredLanguages: languages,
+        postProcessing: configured?.postProcessing,
+      }),
       (settings) => {
         configured = settings;
       },

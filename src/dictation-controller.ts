@@ -10,7 +10,7 @@ export type DictationCapture = {
 };
 export type DictationResult = { text: string; speechSeconds: number; transcribeSeconds: number };
 export type DictationState =
-  | { phase: "idle" | "ready" | "starting" | "listening" | "transcribing" | "cancelling" | "disposed" }
+  | { phase: "idle" | "ready" | "starting" | "listening" | "transcribing" | "post-processing" | "cancelling" | "disposed" }
   | { phase: "result"; result: DictationResult }
   | { phase: "error"; stage: "model" | "capture" | "transcription"; cause: unknown };
 export type DictationControllerOptions = {
@@ -18,6 +18,7 @@ export type DictationControllerOptions = {
   now?: () => number;
   onChange?: (state: DictationState) => void;
   onFrame?: (frame: Int16Array) => void;
+  postProcess?: (text: string, settings: TranscribeSettings, signal: AbortSignal) => Promise<string>;
 };
 type Take = {
   settings: TranscribeSettings;
@@ -64,7 +65,7 @@ export class DictationController {
 
   /** Optional prewarming. Model preparation overlaps with reading or recording. */
   prepare(settings: TranscribeSettings): void {
-    if (this.disposed || ["starting", "listening", "transcribing", "cancelling"].includes(this.current.phase)) return;
+    if (this.disposed || ["starting", "listening", "transcribing", "post-processing", "cancelling"].includes(this.current.phase)) return;
     if (this.take?.settings === settings && this.readiness !== "failed") return;
     this.take?.reservation.cancel();
     this.take = undefined;
@@ -101,7 +102,7 @@ export class DictationController {
   start(settings: TranscribeSettings): Promise<void> {
     if (this.disposed) return Promise.resolve();
     if (this.current.phase === "starting") return this.starting ?? Promise.resolve();
-    if (["listening", "transcribing", "cancelling"].includes(this.current.phase)) return Promise.resolve();
+    if (["listening", "transcribing", "post-processing", "cancelling"].includes(this.current.phase)) return Promise.resolve();
     this.prepare(settings);
     const take = this.take;
     if (!take) return Promise.resolve();
@@ -155,12 +156,19 @@ export class DictationController {
       if (this.take !== take || take.abort.signal.aborted) return undefined;
       take.chunker.flush();
       stage = "transcription";
-      const text = await take.reservation.submit(pcm, take.abort.signal);
+      let text = await take.reservation.submit(pcm, take.abort.signal);
       if (this.disposed || this.take !== take || take.abort.signal.aborted) return undefined;
+      // Keep the ASR timing separate: Try It uses it to judge local model speed.
+      const transcribeSeconds = Math.max(0, (this.now() - stoppedAt) / 1000);
+      if (text.trim() && take.settings.postProcessing.enabled && this.options.postProcess) {
+        this.setState({ phase: "post-processing" });
+        text = await this.options.postProcess(text, take.settings, take.abort.signal);
+        if (this.disposed || this.take !== take || take.abort.signal.aborted) return undefined;
+      }
       const result = {
         text,
         speechSeconds: pcm.length / CAPTURE_SAMPLE_RATE,
-        transcribeSeconds: Math.max(0, (this.now() - stoppedAt) / 1000),
+        transcribeSeconds,
       };
       this.take = undefined;
       this.setState({ phase: "result", result });

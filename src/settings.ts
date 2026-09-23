@@ -7,6 +7,16 @@ import {
 } from "./catalog.js";
 import { DEFAULT_SHORTCUT, normalizeShortcut } from "./shortcut-core.js";
 import { legacySettingsPath, settingsPath } from "./settings-path.js";
+import {
+  validatePostProcessingSettings,
+  type PostProcessingSettings,
+} from "./post-processing-settings.js";
+
+export {
+  DEFAULT_POST_PROCESSING_PROMPT,
+  defaultPostProcessingSettings,
+  type PostProcessingSettings,
+} from "./post-processing-settings.js";
 
 const SETTINGS_VERSION = 1;
 
@@ -37,6 +47,7 @@ export type TranscribeSettings = {
   transcriptionLanguage: TranscriptionLanguage;
   chineseOutput: ChineseOutput;
   microphone: MicrophoneSetting;
+  postProcessing: PostProcessingSettings;
   model: {
     source: "catalog";
     id: string;
@@ -140,6 +151,7 @@ function validateSettings(value: unknown): TranscribeSettings | undefined {
     ),
     chineseOutput: validateChineseOutput(value.chineseOutput),
     microphone,
+    postProcessing: validatePostProcessingSettings(value.postProcessing),
     model: {
       source: "catalog",
       id: value.model.id,
@@ -206,6 +218,7 @@ type ModelSettingsOptions = {
   transcriptionLanguage?: TranscriptionLanguage;
   chineseOutput?: ChineseOutput;
   microphone?: MicrophoneSetting;
+  postProcessing?: PostProcessingSettings;
 };
 
 export function settingsForModel(
@@ -230,6 +243,7 @@ export function settingsForModel(
     ),
     chineseOutput: options.chineseOutput ?? defaultChineseOutput(),
     microphone: { ...(options.microphone ?? DEFAULT_MICROPHONE) },
+    postProcessing: validatePostProcessingSettings(options.postProcessing),
     model: { source: "catalog", id: modelId, path: modelPath },
   };
 }

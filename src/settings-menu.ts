@@ -19,6 +19,7 @@ import {
   type MicrophonePermission,
 } from "./microphone-picker.js";
 import { runModelSelection } from "./onboarding.js";
+import { postProcessingSummary, showPostProcessingMenu } from "./post-processing-menu.js";
 import {
   writeSettings,
   type ChineseOutput,
@@ -45,6 +46,7 @@ type SettingsAction =
   | "model"
   | "transcription-language"
   | "chinese-output"
+  | "post-processing"
   | "microphone"
   | "shortcut";
 
@@ -123,6 +125,12 @@ function settingsHomeChoices(
   }
 
   choices.push(
+    {
+      value: "post-processing",
+      label: "Post-processing",
+      summary: postProcessingSummary(configured.postProcessing),
+      description: "Optional LLM correction: sends transcripts to a chosen provider and may cost money",
+    },
     {
       value: "microphone",
       label: "Microphone",
@@ -326,6 +334,7 @@ export async function showSettingsMenu(
         chineseOutput: configured.chineseOutput,
         currentModelId: configured.model.id,
         microphone: configured.microphone,
+        postProcessing: configured.postProcessing,
         postActivation: "stay",
         onPreferredLanguagesChange: async (preferredLanguages) => {
           if (languagesEqual(preferredLanguages, configured.preferredLanguages)) return;
@@ -367,6 +376,13 @@ export async function showSettingsMenu(
         configured,
         { ...configured, chineseOutput },
         `Chinese output saved as ${summary}`,
+      );
+      continue;
+    }
+
+    if (action === "post-processing") {
+      await showPostProcessingMenu(ctx, configured, (postProcessing, message) =>
+        saveUpdatedSettings(ctx, configured, { ...configured, postProcessing }, message),
       );
       continue;
     }
