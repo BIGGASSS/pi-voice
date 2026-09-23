@@ -145,7 +145,7 @@ export function showReadyStatus(
   if (!ctx.hasUI) return;
   const theme = ctx.ui.theme;
   ctx.ui.setWidget(WIDGET_KEY, [
-    `${theme.fg("success", "✓")} pi-transcribe ready · ${options.talk}`,
+    `${theme.fg("success", "✓")} Pi Voice ready · ${options.talk}`,
     `${theme.fg("accent", options.help.command)} ${theme.fg("muted", options.help.description)}`,
   ]);
 }

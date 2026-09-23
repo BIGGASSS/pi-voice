@@ -16,7 +16,7 @@ import {
 } from "@earendil-works/pi-tui";
 import { formatBinarySize } from "./catalog.js";
 import type { DownloadState } from "./model-selection-controller.js";
-import { TranscribeKeys } from "./keybindings.js";
+import { VoiceKeys } from "./keybindings.js";
 
 type UiTheme = ExtensionContext["ui"]["theme"];
 
@@ -39,7 +39,7 @@ export function onboardingHeader(
   step: number,
   total = 3,
 ): Component {
-  const context = `pi-transcribe setup · ${step} of ${total}`;
+  const context = `Pi Voice setup · ${step} of ${total}`;
   const compactContext = `${step} of ${total}`;
   return {
     invalidate() {},
@@ -135,7 +135,7 @@ export class DownloadPanel {
   constructor(
     tui: TUI,
     private readonly theme: UiTheme,
-    private readonly keys: TranscribeKeys,
+    private readonly keys: VoiceKeys,
     state: DownloadState,
   ) {
     this.state = state;
@@ -203,7 +203,7 @@ export class SingleSelectPicker<T extends string> extends Container implements F
     this.search.focused = value && Boolean(this.options.searchable);
   }
 
-  private readonly keys: TranscribeKeys;
+  private readonly keys: VoiceKeys;
 
   constructor(
     private readonly tui: TUI,
@@ -225,7 +225,7 @@ export class SingleSelectPicker<T extends string> extends Container implements F
     private readonly done: (value: T | undefined) => void,
   ) {
     super();
-    this.keys = new TranscribeKeys(keybindings);
+    this.keys = new VoiceKeys(keybindings);
     this.visibleLimit = options.maximumVisible ?? 10;
     this.hasDescriptions = choices.some((choice) => choice.description);
     this.filtered = [...choices];

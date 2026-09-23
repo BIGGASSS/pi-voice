@@ -1,19 +1,21 @@
-# pi-transcribe
+# Pi Voice
 
-Local speech-to-text dictation for Pi.
+Local speech-to-text for Pi.
+
+Press a keyboard shortcut, talk, and the resulting transcript will be put directly into your chat.
 
 ## Install
 
-Install directly from GitHub:
+Install the npm package:
 
 ```bash
-pi install ssh://git@github.com/earendil-works/pi-transcribe
+pi install npm:@earendil-works/pi-voice
 ```
 
-After the first npm release, it can also be installed with:
+If you prefer being on the development tip, you can install from GitHub:
 
 ```bash
-pi install npm:@earendil-works/pi-transcribe
+pi install ssh://git@github.com/earendil-works/pi-voice
 ```
 
 ## Usage
@@ -22,28 +24,27 @@ The extension registers:
 
 - a configurable terminal shortcut (`Ctrl+Alt+Z` by default) to start and stop recording;
 - a `transcribe_file` tool that the agent can use to transcribe local audio or video files;
-- `/transcribe` for preferred languages, model, transcription language, microphone, and shortcut settings.
+- `/voice-settings` for preferred languages, model, transcription language, microphone, and shortcut settings.
 
-To develop or run it from a checkout:
+`/transcribe` remains available as a compatibility alias for `/voice-settings`. The `/voice` command is reserved for a future voice mode.
 
-```bash
-npm install --ignore-scripts
-pi -e /absolute/path/to/pi-transcribe
-```
+## Upgrading from pi-transcribe
 
-While iterating on setup, enable the debug-only onboarding command when starting Pi:
+It's recommended to install Pi Voice via NPM. If you have an older install of pi-transcribe uninstall it via: 
 
 ```bash
-PI_TRANSCRIBE_DEBUG=1 pi -e /absolute/path/to/pi-transcribe
+pi remove git:github.com/earendil-works/pi-transcribe
 ```
 
-Then run `/transcribe-onboarding` to replay the complete onboarding flow. The command is not registered unless `PI_TRANSCRIBE_DEBUG=1`. Canceling before selecting a model leaves the current configuration unchanged; model selections are applied immediately.
+If you installed it into a project with `-l`, run `pi remove -l git:github.com/earendil-works/pi-transcribe` from that project instead. Then install Pi Voice with:
 
-Press the shortcut while Pi has focus, speak, then press it again. A live level meter appears above the editor while recording. `Esc` cancels. Audio is transcribed locally and inserted at the editor cursor. Streaming-capable models process roughly 500 ms audio chunks while recording; other models use the complete recording after it stops. The shortcut is a Pi terminal binding, not a global OS hotkey.
+```bash
+pi install npm:@earendil-works/pi-voice
+```
 
 ## File transcription and FFmpeg
 
-The agent can call `transcribe_file` for local audio or video files. Transcription jobs share one loaded model; queued files reuse it, while microphone dictation runs before waiting file jobs after any active job finishes. To bound memory use, at most two file operations are admitted at once, only one FFmpeg decoder runs at a time, and decoded audio is limited to 128 MiB (about 35 minutes). File decoding requires the `ffmpeg` executable; microphone dictation does not. Install FFmpeg with your system package manager:
+The agent can call `transcribe_file` for local audio or video files. Decoded audio is limited to 128 MiB (about 35 minutes). File decoding requires the `ffmpeg` executable. Install FFmpeg with your system package manager if you don't already have it installed
 
 ```bash
 # macOS with Homebrew
@@ -56,10 +57,30 @@ sudo apt install ffmpeg
 winget install Gyan.FFmpeg
 ```
 
-If FFmpeg is installed outside `PATH`, point pi-transcribe at it before starting Pi:
+If FFmpeg is installed outside `PATH`, point Pi Voice at it before starting Pi:
 
 ```bash
-export PI_TRANSCRIBE_FFMPEG_PATH=/path/to/ffmpeg
+export PI_VOICE_FFMPEG_PATH=/path/to/ffmpeg
 ```
 
-When FFmpeg is unavailable, `transcribe_file` reports platform-specific guidance to the agent. The agent should ask before running a package-manager command. Model setup is still explicit: run `/transcribe` once in the interactive TUI to choose and, after confirmation, download a local model.
+The legacy `PI_TRANSCRIBE_FFMPEG_PATH` variable remains supported when `PI_VOICE_FFMPEG_PATH` is not set.
+
+When FFmpeg is unavailable, `transcribe_file` reports platform-specific guidance to the agent. The agent should ask before running a package-manager command. Model setup is still explicit: run `/voice-settings` once in the interactive TUI to choose and, after confirmation, download a local model.
+
+## Developing & Building Pi Voice
+
+To develop or run it from a checkout:
+
+```bash
+git clone git@github.com:earendil-works/pi-voice.git
+cd pi-voice
+npm install --ignore-scripts
+pi -e .
+```
+
+If you want to be able to re-run onboarding you can enable the debug env var when starting Pi. This enables the `/voice-onboarding` command.
+
+```bash
+PI_VOICE_DEBUG=1 pi -e /absolute/path/to/pi-voice
+```
+

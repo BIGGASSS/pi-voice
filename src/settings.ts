@@ -1,6 +1,4 @@
-import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { readFile, rename, unlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import {
   languageIdentity,
   getCatalogModel,
@@ -8,6 +6,7 @@ import {
   type CatalogModel,
 } from "./catalog.js";
 import { DEFAULT_SHORTCUT, normalizeShortcut } from "./shortcut-core.js";
+import { legacySettingsPath, settingsPath } from "./settings-path.js";
 
 const SETTINGS_VERSION = 1;
 
@@ -49,10 +48,6 @@ type SettingsReadResult = {
   settings?: TranscribeSettings;
   warning?: string;
 };
-
-function settingsPath(): string {
-  return join(getAgentDir(), "pi-transcribe.json");
-}
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -153,17 +148,40 @@ function validateSettings(value: unknown): TranscribeSettings | undefined {
   };
 }
 
-export async function readSettings(): Promise<SettingsReadResult> {
+async function readSettingsFile(path: string): Promise<SettingsReadResult> {
   try {
-    const parsed: unknown = JSON.parse(await readFile(settingsPath(), "utf8"));
+    const parsed: unknown = JSON.parse(await readFile(path, "utf8"));
     const settings = validateSettings(parsed);
     return settings
       ? { settings }
-      : { warning: `Invalid settings in ${settingsPath()}; configuration is required.` };
+      : { warning: `Invalid settings in ${path}; configuration is required.` };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
     return {
-      warning: `Could not read ${settingsPath()}: ${error instanceof Error ? error.message : String(error)}`,
+      warning: `Could not read ${path}: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
+export async function readSettings(): Promise<SettingsReadResult> {
+  const currentPath = settingsPath();
+  const current = await readSettingsFile(currentPath);
+  if (current.settings || current.warning) return current;
+
+  const legacyPath = legacySettingsPath();
+  const legacy = await readSettingsFile(legacyPath);
+  if (!legacy.settings) return legacy;
+
+  try {
+    await writeSettings(legacy.settings);
+    await unlink(legacyPath).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== "ENOENT") throw error;
+    });
+    return { settings: legacy.settings };
+  } catch (error) {
+    return {
+      settings: legacy.settings,
+      warning: `Loaded legacy settings from ${legacyPath}, but could not migrate them to ${currentPath}: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
 }

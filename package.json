@@ -1,16 +1,16 @@
 {
-  "name": "@earendil-works/pi-transcribe",
-  "version": "0.0.1",
-  "description": "Local speech-to-text dictation for Pi",
+  "name": "@earendil-works/pi-voice",
+  "version": "0.1.0",
+  "description": "Local speech-to-text for Pi",
   "type": "module",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/earendil-works/pi-transcribe.git"
+    "url": "git+https://github.com/earendil-works/pi-voice.git"
   },
-  "homepage": "https://github.com/earendil-works/pi-transcribe#readme",
+  "homepage": "https://github.com/earendil-works/pi-voice#readme",
   "bugs": {
-    "url": "https://github.com/earendil-works/pi-transcribe/issues"
+    "url": "https://github.com/earendil-works/pi-voice/issues"
   },
   "files": [
     "src",
@@ -25,6 +25,8 @@
   "keywords": [
     "pi-package",
     "pi-extension",
+    "voice",
+    "dictation",
     "transcription",
     "speech-to-text"
   ],

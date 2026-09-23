@@ -47,7 +47,7 @@ function scriptedContext(steps: Step[]) {
 
 function isolatedSettings(t: TestContext) {
   const previous = process.env.PI_CODING_AGENT_DIR;
-  const directory = mkdtempSync(join(tmpdir(), "pi-transcribe-onboarding-test-"));
+  const directory = mkdtempSync(join(tmpdir(), "pi-voice-onboarding-test-"));
   process.env.PI_CODING_AGENT_DIR = directory;
   t.after(() => {
     if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
