@@ -5,11 +5,12 @@ import {
   matchesKey,
   type Keybinding,
   type KeybindingDefinitions,
+  type KeybindingsConfig,
   type KeyId,
 } from "@earendil-works/pi-tui";
 
 /**
- * Every key pi-transcribe binds itself, in pi's definition shape. Users
+ * Every key Pi Voice binds itself, in pi's definition shape. Users
  * override these with the same ids in pi's keybindings.json; pi keeps entries
  * it does not recognise and hands them back through `getUserBindings()`.
  *
@@ -18,33 +19,46 @@ import {
  * in between swallow the Continue key so the setup sequence never reads Tab as
  * "go back".
  */
-export const TRANSCRIBE_KEYBINDINGS = {
-  "transcribe.languages.toggle": { defaultKeys: "space", description: "Toggle the highlighted language" },
-  "transcribe.languages.continue": { defaultKeys: "tab", description: "Continue with the selected languages" },
-  "transcribe.languages.change": { defaultKeys: "ctrl+l", description: "Change spoken languages" },
-  "transcribe.recommendations.browseAll": { defaultKeys: "o", description: "Browse all models" },
-  "transcribe.models.ratingsHelp": { defaultKeys: "?", description: "Open the rating guide" },
-  "transcribe.ratingsHelp.close": { defaultKeys: "q", description: "Close the rating guide" },
-  "transcribe.scroll.top": { defaultKeys: "home", description: "Scroll to the top" },
-  "transcribe.scroll.bottom": { defaultKeys: "end", description: "Scroll to the bottom" },
-  "transcribe.tryIt.shortcut": { defaultKeys: "s", description: "Change the dictation shortcut" },
-  "transcribe.tryIt.microphone": { defaultKeys: "m", description: "Change the microphone" },
-  "transcribe.tryIt.model": { defaultKeys: "c", description: "Change the model" },
-  "transcribe.shortcut.useDefault": { defaultKeys: "d", description: "Use the default shortcut" },
-  "transcribe.dictation.cancel": { defaultKeys: "escape", description: "Cancel recording or transcription" },
+export const VOICE_KEYBINDINGS = {
+  "voice.languages.toggle": { defaultKeys: "space", description: "Toggle the highlighted language" },
+  "voice.languages.continue": { defaultKeys: "tab", description: "Continue with the selected languages" },
+  "voice.languages.change": { defaultKeys: "ctrl+l", description: "Change spoken languages" },
+  "voice.recommendations.browseAll": { defaultKeys: "o", description: "Browse all models" },
+  "voice.models.ratingsHelp": { defaultKeys: "?", description: "Open the rating guide" },
+  "voice.ratingsHelp.close": { defaultKeys: "q", description: "Close the rating guide" },
+  "voice.scroll.top": { defaultKeys: "home", description: "Scroll to the top" },
+  "voice.scroll.bottom": { defaultKeys: "end", description: "Scroll to the bottom" },
+  "voice.tryIt.shortcut": { defaultKeys: "s", description: "Change the dictation shortcut" },
+  "voice.tryIt.microphone": { defaultKeys: "m", description: "Change the microphone" },
+  "voice.tryIt.model": { defaultKeys: "c", description: "Change the model" },
+  "voice.shortcut.useDefault": { defaultKeys: "d", description: "Use the default shortcut" },
+  "voice.dictation.cancel": { defaultKeys: "escape", description: "Cancel recording or transcription" },
 } as const satisfies KeybindingDefinitions;
 
-export type TranscribeKeybinding = keyof typeof TRANSCRIBE_KEYBINDINGS;
+export type VoiceKeybinding = keyof typeof VOICE_KEYBINDINGS;
 /** A pi `tui.*` id or one of ours; callers never need to know which. */
-export type KeyAction = Keybinding | TranscribeKeybinding;
+export type KeyAction = Keybinding | VoiceKeybinding;
 
-export function isTranscribeKeybinding(id: string): id is TranscribeKeybinding {
-  return Object.hasOwn(TRANSCRIBE_KEYBINDINGS, id);
+export function isVoiceKeybinding(id: string): id is VoiceKeybinding {
+  return Object.hasOwn(VOICE_KEYBINDINGS, id);
 }
 
 // Our ids are not declaration-merged into pi's `Keybindings`, so pi's manager
 // would silently accept them and never match. Route by table membership instead.
-const asTuiId = (id: TranscribeKeybinding): Keybinding => id as unknown as Keybinding;
+const asTuiId = (id: VoiceKeybinding): Keybinding => id as unknown as Keybinding;
+
+/**
+ * Before the Pi Voice rename our ids were `transcribe.*`. A user binding under
+ * the old id still applies unless the matching `voice.*` id is also set.
+ */
+function withLegacyBindings(user: KeybindingsConfig): KeybindingsConfig {
+  const bindings = { ...user };
+  for (const id of Object.keys(VOICE_KEYBINDINGS)) {
+    const legacy = user[id.replace(/^voice\./, "transcribe.")];
+    if (bindings[id] === undefined && legacy !== undefined) bindings[id] = legacy;
+  }
+  return bindings;
+}
 
 function matchesLocalKey(data: string, key: KeyId): boolean {
   if (matchesKey(data, key)) return true;
@@ -66,20 +80,20 @@ export function matchesShortcut(data: string, shortcut: string): boolean {
  * apply. Construct it fresh rather than caching: pi's /reload swaps the user
  * bindings on its manager and the local copy is a snapshot.
  */
-export class TranscribeKeys {
+export class VoiceKeys {
   private readonly local: KeybindingsManager;
 
   constructor(readonly host: KeybindingsManager) {
-    this.local = new KeybindingsManager(TRANSCRIBE_KEYBINDINGS, host.getUserBindings());
+    this.local = new KeybindingsManager(VOICE_KEYBINDINGS, withLegacyBindings(host.getUserBindings()));
   }
 
   matches(data: string, id: KeyAction): boolean {
-    if (!isTranscribeKeybinding(id)) return this.host.matches(data, id);
+    if (!isVoiceKeybinding(id)) return this.host.matches(data, id);
     return this.local.getKeys(asTuiId(id)).some((key) => matchesLocalKey(data, key));
   }
 
   keys(id: KeyAction): KeyId[] {
-    return isTranscribeKeybinding(id) ? this.local.getKeys(asTuiId(id)) : this.host.getKeys(id);
+    return isVoiceKeybinding(id) ? this.local.getKeys(asTuiId(id)) : this.host.getKeys(id);
   }
 
   keyText(id: KeyAction | readonly KeyAction[]): string {

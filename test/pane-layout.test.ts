@@ -9,7 +9,7 @@ import {
   LanguagePicker,
 } from "../src/model-picker.js";
 import { ModelRatingsHelp } from "../src/model-ratings-help.js";
-import { TranscribeKeys } from "../src/keybindings.js";
+import { VoiceKeys } from "../src/keybindings.js";
 import { RecommendedModelPicker } from "../src/recommendation-picker.js";
 import type { TranscribeSettings } from "../src/settings.js";
 import { TryItPane } from "../src/try-it.js";
@@ -100,7 +100,7 @@ test("editor-mounted panes respect the shared 80x24 row and width budget", async
       makeTui(), testTheme(), keybindings(), settings, pendingService as never, () => {},
     )],
     ["ratings help", () => {
-      const help = new ModelRatingsHelp(makeTui(), testTheme(), new TranscribeKeys(keybindings()), true);
+      const help = new ModelRatingsHelp(makeTui(), testTheme(), new VoiceKeys(keybindings()), true);
       help.open();
       return help;
     }],

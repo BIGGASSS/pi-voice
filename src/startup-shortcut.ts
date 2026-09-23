@@ -1,7 +1,6 @@
-import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { DEFAULT_SHORTCUT, normalizeShortcut } from "./shortcut-core.js";
+import { legacySettingsPath, settingsPath } from "./settings-path.js";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -9,15 +8,17 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 /** Read only the setting Pi needs while synchronously registering the extension. */
 export function readShortcutForRegistration(): string {
-  try {
-    const parsed: unknown = JSON.parse(
-      readFileSync(join(getAgentDir(), "pi-transcribe.json"), "utf8"),
-    );
-    if (!isObject(parsed) || parsed.version !== 1 || typeof parsed.shortcut !== "string") {
+  for (const path of [settingsPath(), legacySettingsPath()]) {
+    try {
+      const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+      if (!isObject(parsed) || parsed.version !== 1 || typeof parsed.shortcut !== "string") {
+        return DEFAULT_SHORTCUT;
+      }
+      return normalizeShortcut(parsed.shortcut) ?? DEFAULT_SHORTCUT;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
       return DEFAULT_SHORTCUT;
     }
-    return normalizeShortcut(parsed.shortcut) ?? DEFAULT_SHORTCUT;
-  } catch {
-    return DEFAULT_SHORTCUT;
   }
+  return DEFAULT_SHORTCUT;
 }

@@ -1,5 +1,5 @@
 import { Text, truncateToWidth } from "@earendil-works/pi-tui";
-import type { TranscribeKeys } from "./keybindings.js";
+import type { VoiceKeys } from "./keybindings.js";
 
 /** A bounded read-only view. Clipping never changes the underlying transcript. */
 export class TranscriptPreview {
@@ -9,7 +9,7 @@ export class TranscriptPreview {
   private lineCount = 1;
   private pageSize = 1;
 
-  constructor(private readonly keys: TranscribeKeys) {}
+  constructor(private readonly keys: VoiceKeys) {}
 
   setText(content: string): void {
     if (this.content === content) return;
@@ -43,8 +43,8 @@ export class TranscriptPreview {
     else if (this.keys.matches(data, "tui.select.down")) offset++;
     else if (this.keys.matches(data, "tui.select.pageUp")) offset -= this.pageSize;
     else if (this.keys.matches(data, "tui.select.pageDown")) offset += this.pageSize;
-    else if (this.keys.matches(data, "transcribe.scroll.top")) offset = 0;
-    else if (this.keys.matches(data, "transcribe.scroll.bottom")) offset = this.lineCount - this.pageSize;
+    else if (this.keys.matches(data, "voice.scroll.top")) offset = 0;
+    else if (this.keys.matches(data, "voice.scroll.bottom")) offset = this.lineCount - this.pageSize;
     else return false;
     this.offset = Math.max(0, Math.min(offset, this.lineCount - this.pageSize));
     return true;

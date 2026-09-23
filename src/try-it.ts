@@ -10,7 +10,7 @@ import { createMicrophoneCapture, testMicrophonePermission } from "./audio.js";
 import { getCatalogModel } from "./catalog.js";
 import { DictationController, type DictationControllerOptions } from "./dictation-controller.js";
 import { microphoneSummary } from "./microphone-picker.js";
-import { matchesShortcut, TranscribeKeys } from "./keybindings.js";
+import { matchesShortcut, VoiceKeys } from "./keybindings.js";
 import { COMFORTABLE_REAL_TIME_FACTOR } from "./recommendations.js";
 import type { TranscribeSettings } from "./settings.js";
 import { displayShortcut } from "./shortcut-core.js";
@@ -59,7 +59,7 @@ export class TryItPane implements Component {
   private readonly dictation: DictationController;
   private readonly analyzer = new SpectrumAnalyzer();
   private readonly preview: TranscriptPreview;
-  private readonly keys: TranscribeKeys;
+  private readonly keys: VoiceKeys;
   private nextPaintAt = 0;
   private disposed = false;
   private closed = false;
@@ -76,7 +76,7 @@ export class TryItPane implements Component {
     private readonly done: (result: TryItResult) => void,
     options: TryItPaneOptions = { createCapture: createMicrophoneCapture },
   ) {
-    this.keys = new TranscribeKeys(keybindings);
+    this.keys = new VoiceKeys(keybindings);
     this.preview = new TranscriptPreview(this.keys);
     this.showMacPermissionNote = options.showMacPermissionNote ?? false;
     this.dictation = new DictationController(service, {
@@ -154,7 +154,7 @@ export class TryItPane implements Component {
       content = transcript || fg("muted", "No speech detected");
       activity = fg("muted", formatTranscriptionSummary(speechSeconds, transcribeSeconds));
       if (needsFasterModel(speechSeconds, transcribeSeconds)) {
-        details = fg("warning", "Slow on this machine? Press c to try another model.");
+        details = fg("warning", `Slow on this machine? Press ${this.keys.keyText("voice.tryIt.model")} to try another model.`);
       }
     } else if (state.phase === "error") {
       activity = fg("error", state.stage === "model" ? "Could not load the model" : state.stage === "capture" ? "Microphone capture failed" : "Transcription failed");
@@ -212,9 +212,9 @@ export class TryItPane implements Component {
       return [
         ...(details ? [...text(details), ...(compact ? [] : [""])] : []),
         ...permission,
-        ...render(setting("Shortcut", shortcut, this.keys.keyText("transcribe.tryIt.shortcut"), compact)),
-        ...render(setting("Microphone", microphoneSummary(this.settings.microphone), this.keys.keyText("transcribe.tryIt.microphone"), compact)),
-        ...render(setting("Model", modelName, this.keys.keyText("transcribe.tryIt.model"), compact)),
+        ...render(setting("Shortcut", shortcut, this.keys.keyText("voice.tryIt.shortcut"), compact)),
+        ...render(setting("Microphone", microphoneSummary(this.settings.microphone), this.keys.keyText("voice.tryIt.microphone"), compact)),
+        ...render(setting("Model", modelName, this.keys.keyText("voice.tryIt.model"), compact)),
         ...(compact ? [] : [""]),
         ...text(hints),
         ...(compact ? [] : [""]),
@@ -291,11 +291,11 @@ export class TryItPane implements Component {
       if (phase === "result") this.leave({ action: "done" });
       return;
     }
-    if (this.keys.matches(data, "transcribe.tryIt.microphone")) {
+    if (this.keys.matches(data, "voice.tryIt.microphone")) {
       this.leave({ action: "microphone" });
-    } else if (this.keys.matches(data, "transcribe.tryIt.shortcut")) {
+    } else if (this.keys.matches(data, "voice.tryIt.shortcut")) {
       this.leave({ action: "shortcut" });
-    } else if (this.keys.matches(data, "transcribe.tryIt.model")) {
+    } else if (this.keys.matches(data, "voice.tryIt.model")) {
       this.leave({ action: "model" });
     }
   }

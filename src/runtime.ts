@@ -6,7 +6,7 @@ import type {
 import { getKeybindings } from "@earendil-works/pi-tui";
 import { existsSync } from "node:fs";
 import { DictationController } from "./dictation-controller.js";
-import { TranscribeKeys } from "./keybindings.js";
+import { VoiceKeys } from "./keybindings.js";
 import type { TranscribeSettings } from "./settings.js";
 import { displayShortcut } from "./shortcut-core.js";
 import { TranscriptionService } from "./transcription-service.js";
@@ -21,7 +21,7 @@ const COMPLETION_WIDGET_MS = 5_000;
 /** Setup confirmation stays long enough to read the shortcut and follow-up command. */
 const READY_WIDGET_MS = 20_000;
 
-export type PiTranscribeRuntime = {
+export type PiVoiceRuntime = {
   readonly service: TranscriptionService;
   toggleCapture(ctx: ExtensionContext): Promise<void>;
   showSettings(ctx: ExtensionCommandContext): Promise<void>;
@@ -47,10 +47,10 @@ function transcriptionErrorMessage(error: unknown): string {
   return `Local transcription failed: ${message}`;
 }
 
-export function createPiTranscribeRuntime(
+export function createPiVoiceRuntime(
   pi: ExtensionAPI,
   registeredShortcut: string,
-): PiTranscribeRuntime {
+): PiVoiceRuntime {
   let recording: ActiveRecording | undefined;
   let operation: Promise<void> | undefined;
   let dictation: DictationController | undefined;
@@ -94,15 +94,15 @@ export function createPiTranscribeRuntime(
     const talk = reloadNeeded
       ? `run /reload, then ${displayShortcut(configured.shortcut)} to talk`
       : `${displayShortcut(configured.shortcut)} to talk`;
-    const command = "/transcribe";
+    const command = "/voice-settings";
     const commandDescription = "to change settings and download new models";
     const summary = `${command} ${commandDescription}`;
 
     // The TUI renders a success-colored widget in the meter slot so the user
-    // sees where pi-transcribe talks to them. RPC and print keep the plain
+    // sees where Pi Voice talks to them. RPC and print keep the plain
     // notification: RPC forwards widget lines verbatim, so theme escapes leak.
     if (ctx.mode !== "tui") {
-      ctx.ui.notify(`✓ pi-transcribe ready · ${talk}\n${summary}`, "info");
+      ctx.ui.notify(`✓ Pi Voice ready · ${talk}\n${summary}`, "info");
       return;
     }
     const { clearTranscribeWidget, showReadyStatus } = await loadVisualizer();
@@ -178,13 +178,14 @@ export function createPiTranscribeRuntime(
     return { configured, completedFirstRun: previous === undefined && configured !== undefined };
   }
 
+
   function listenForCancel(ctx: ExtensionContext): void {
     stopListening?.();
     if (!ctx.hasUI) return;
     // No pane here to receive an injected manager; pi's global is the same one.
-    const keys = new TranscribeKeys(getKeybindings());
+    const keys = new VoiceKeys(getKeybindings());
     stopListening = ctx.ui.onTerminalInput((data) => {
-      if (!keys.matches(data, "transcribe.dictation.cancel")) return;
+      if (!keys.matches(data, "voice.dictation.cancel")) return;
       if (recording) {
         void runExclusive(ctx, () => cancelRecording(ctx));
         return { consume: true };
@@ -256,7 +257,8 @@ export function createPiTranscribeRuntime(
     const active = recording!;
     recording = undefined;
     active.meter.stop({ clearWidget: false });
-    showTranscribeStatus(ctx, "Transcribing…", { cancelable: true });
+    const cancelKeys = new VoiceKeys(getKeybindings()).keyText("voice.dictation.cancel");
+    showTranscribeStatus(ctx, "Transcribing…", { cancelKeys });
     let keepCompletionVisible = false;
     try {
       const result = await active.dictation.stop();
@@ -321,7 +323,7 @@ export function createPiTranscribeRuntime(
       }
       // Key text via the same formatter as the Try It pane so the meter
       // reads exactly like the hint the user learned during setup.
-      const cancelKeys = new TranscribeKeys(getKeybindings()).keyText("transcribe.dictation.cancel");
+      const cancelKeys = new VoiceKeys(getKeybindings()).keyText("voice.dictation.cancel");
       meter.start(ctx, {
         action: `${displayShortcut(registeredShortcut)} to transcribe`,
         discard: `${cancelKeys} to discard`,
@@ -379,7 +381,7 @@ export function createPiTranscribeRuntime(
     task: () => Promise<void>,
   ): Promise<void> {
     if (operation) {
-      ctx.ui.notify("A pi-transcribe operation is already in progress", "warning");
+      ctx.ui.notify("A Pi Voice operation is already in progress", "warning");
       return operation;
     }
 

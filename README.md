@@ -1,19 +1,21 @@
-# pi-transcribe
+# Pi Voice
 
-Local speech-to-text dictation for Pi.
+Local speech-to-text for Pi.
+
+Press a keyboard shortcut, talk, and the resulting transcript will be put directly into your chat.
 
 ## Install
 
-Install directly from GitHub:
+Install the npm package:
 
 ```bash
-pi install ssh://git@github.com/earendil-works/pi-transcribe
+pi install npm:@earendil-works/pi-voice
 ```
 
-After the first npm release, it can also be installed with:
+If you prefer being on the development tip, you can install from GitHub:
 
 ```bash
-pi install npm:@earendil-works/pi-transcribe
+pi install ssh://git@github.com/earendil-works/pi-voice
 ```
 
 ## Usage
@@ -21,21 +23,43 @@ pi install npm:@earendil-works/pi-transcribe
 The extension registers:
 
 - a configurable terminal shortcut (`Ctrl+Alt+Z` by default) to start and stop recording;
-- `/transcribe` for preferred languages, model, transcription language, microphone, and shortcut settings.
+- `/voice-settings` for preferred languages, model, transcription language, microphone, and shortcut settings.
+
+`/transcribe` remains available as a compatibility alias for `/voice-settings`. The `/voice` command is reserved for a future voice mode.
+
+## Upgrading from pi-transcribe
+
+It's recommended to install Pi Voice via NPM. If you have an older install of pi-transcribe uninstall it via:
+
+```bash
+pi remove git:github.com/earendil-works/pi-transcribe
+```
+
+If you installed it into a project with `-l`, run `pi remove -l git:github.com/earendil-works/pi-transcribe` from that project instead. Then install Pi Voice with:
+
+```bash
+pi install npm:@earendil-works/pi-voice
+```
+
+This checkout omits upstream's `transcribe_file` tool; only microphone dictation is available. The upstream npm package and GitHub install include the tool.
+
+Press the shortcut while Pi has focus, speak, then press it again. A live level meter appears above the editor while recording. `Esc` cancels. Audio is transcribed locally and inserted at the editor cursor. Streaming-capable models process roughly 500 ms audio chunks while recording; other models use the complete recording after it stops. The shortcut is a Pi terminal binding, not a global OS hotkey.
+
+## Developing & Building Pi Voice
 
 To develop or run it from a checkout:
 
 ```bash
+git clone git@github.com:earendil-works/pi-voice.git
+cd pi-voice
 npm install --ignore-scripts
-pi -e /absolute/path/to/pi-transcribe
+pi -e .
 ```
 
-While iterating on setup, enable the debug-only onboarding command when starting Pi:
+If you want to be able to re-run onboarding you can enable the debug env var when starting Pi. This enables the `/voice-onboarding` command.
 
 ```bash
-PI_TRANSCRIBE_DEBUG=1 pi -e /absolute/path/to/pi-transcribe
+PI_VOICE_DEBUG=1 pi -e /absolute/path/to/pi-voice
 ```
 
-Then run `/transcribe-onboarding` to replay the complete onboarding flow. The command is not registered unless `PI_TRANSCRIBE_DEBUG=1`. Canceling before selecting a model leaves the current configuration unchanged; model selections are applied immediately.
-
-Press the shortcut while Pi has focus, speak, then press it again. A live level meter appears above the editor while recording. `Esc` cancels. Audio is transcribed locally and inserted at the editor cursor. Streaming-capable models process roughly 500 ms audio chunks while recording; other models use the complete recording after it stops. The shortcut is a Pi terminal binding, not a global OS hotkey.
+Run `/voice-onboarding` to replay setup. Canceling before selecting a model leaves the current configuration unchanged; model selections are applied immediately.
