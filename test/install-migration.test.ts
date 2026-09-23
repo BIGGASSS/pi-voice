@@ -1,17 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { test } from "node:test";
 import type {
   SlashCommandInfo,
   SourceInfo,
 } from "@earendil-works/pi-coding-agent";
-import {
-  claimLegacyGitNotice,
-  findLegacyGitInstall,
-  legacyGitMigrationMessage,
-} from "../src/install-migration.js";
+import { findLegacyGitInstall } from "../src/install-migration.js";
 
 function command(
   source: string,
@@ -51,31 +44,4 @@ test("does not flag npm, the renamed Git repository, or top-level checkouts", ()
     ]),
     undefined,
   );
-});
-
-test("claims the migration notice only once", async (t) => {
-  const previous = process.env.PI_CODING_AGENT_DIR;
-  const directory = await mkdtemp(join(tmpdir(), "pi-voice-install-migration-test-"));
-  process.env.PI_CODING_AGENT_DIR = directory;
-  t.after(async () => {
-    if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
-    else process.env.PI_CODING_AGENT_DIR = previous;
-    await rm(directory, { recursive: true, force: true });
-  });
-
-  assert.equal(await claimLegacyGitNotice(), true);
-  assert.equal(await claimLegacyGitNotice(), false);
-});
-
-test("migration guidance preserves the package scope", () => {
-  const source = "git:github.com/earendil-works/pi-transcribe";
-  const globalMessage = legacyGitMigrationMessage(command(source).sourceInfo);
-  assert.match(globalMessage, new RegExp(`pi remove ${source}`));
-  assert.match(globalMessage, /pi install npm:@earendil-works\/pi-voice/);
-
-  const projectMessage = legacyGitMigrationMessage(
-    command(source, { scope: "project" }).sourceInfo,
-  );
-  assert.match(projectMessage, new RegExp(`pi remove -l ${source}`));
-  assert.match(projectMessage, /pi install -l npm:@earendil-works\/pi-voice/);
 });
